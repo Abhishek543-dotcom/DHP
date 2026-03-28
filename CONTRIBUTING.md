@@ -1,31 +1,94 @@
-# Contributing
+# Contributing to Lakehouse Platform
 
-Thanks for your interest in improving Lakehouse Platform.
+Thanks for contributing. This guide keeps contributions consistent, reviewable, and production-safe.
 
-## Getting Started
+## 1. Before You Start
 
-1. Fork the repository and create a feature branch.
-2. Copy `.env.example` to `.env` and set local values.
-3. Start local infrastructure:
-   - `cd infra`
-   - `docker-compose -f docker-compose.dev.yaml up -d`
-4. Run tests before opening a PR:
-   - `make test`
+- Read `README.md`, `docs/architecture.md`, and `docs/runbook.md`.
+- Check open issues/PRs to avoid duplicate effort.
+- For larger changes, open an issue first to align on scope.
 
-## Development Guidelines
+## 2. Local Development Setup
 
-- Prefer small, focused pull requests.
-- Add tests for behavior changes.
-- Keep API contracts backward compatible where possible.
-- Never commit secrets or credentials.
+```bash
+cp .env.example .env
+make build-spark
+make up
+```
 
-## Pull Requests
+Optional service-local development:
+
+```bash
+cd services/job-service && pip install -r requirements.txt && uvicorn app.main:app --reload --port 8001
+cd services/metadata-service && pip install -r requirements.txt && uvicorn app.main:app --reload --port 8002
+cd services/log-service && pip install -r requirements.txt && uvicorn app.main:app --reload --port 8003
+cd services/storage-service && pip install -r requirements.txt && uvicorn app.main:app --reload --port 8004
+```
+
+## 3. Branch and Commit Guidelines
+
+Recommended branch naming:
+
+- `feature/<short-description>`
+- `fix/<short-description>`
+- `chore/<short-description>`
+
+Commit guidance:
+
+- Keep commits focused and atomic.
+- Use clear imperative subject lines.
+- Avoid bundling refactors with behavior changes unless necessary.
+
+## 4. Coding Standards
+
+- Keep APIs backward compatible whenever possible.
+- Prefer explicit error handling with actionable messages.
+- Keep configuration in environment variables.
+- Do not hardcode secrets, tokens, or credentials.
+- Update docs for behavior, API, config, or ops changes.
+
+## 5. Testing Requirements
+
+Run tests before opening a PR:
+
+```bash
+make test
+```
+
+When relevant, also validate:
+
+- Endpoint behavior in Swagger (`/docs`)
+- End-to-end flows using Postman collection in `docs/postman/`
+- Observability panels and target health in Grafana/Prometheus
+
+## 6. Pull Request Expectations
 
 A good PR includes:
-- Problem statement and proposed solution.
-- Testing notes (commands and outputs).
-- Any migration or deployment considerations.
 
-## Code of Conduct
+- Clear problem statement
+- What changed and why
+- Validation evidence (commands + outcome)
+- Risk and rollback notes for operational changes
+- Linked issue(s)
 
-By participating, you agree to follow the project's Code of Conduct.
+Use the PR template and fill all sections.
+
+## 7. Documentation Expectations
+
+Update markdown docs when you change:
+
+- API routes, payloads, status codes, auth headers
+- Runtime behavior (job lifecycle, retries, callbacks)
+- Infrastructure (compose, k8s, observability)
+- New runbook procedures or troubleshooting guidance
+
+## 8. Security and Responsible Disclosure
+
+If you find a vulnerability, do not open a public issue.
+
+- Follow `SECURITY.md`
+- Use private disclosure channels first
+
+## 9. Community Standards
+
+By participating, you agree to follow `CODE_OF_CONDUCT.md`.
