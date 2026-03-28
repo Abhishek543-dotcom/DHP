@@ -1,0 +1,58 @@
+# =============================================
+# Network Policies — Isolate Spark Job Containers
+# =============================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spark-job-isolation
+  namespace: lakehouse-jobs
+spec:
+  podSelector:
+    matchLabels:
+      app: lakehouse-spark
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []  # No incoming traffic to Spark jobs
+  egress:
+    # Allow access to S3/MinIO
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: lakehouse-platform
+          podSelector:
+            matchLabels:
+              app: minio
+      ports:
+        - port: 9000
+          protocol: TCP
+    # Allow access to Kafka (for log shipping)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: lakehouse-platform
+          podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - port: 9092
+          protocol: TCP
+    # Allow callback to Job Service
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: lakehouse-platform
+          podSelector:
+            matchLabels:
+              app: job-service
+      ports:
+        - port: 8000
+          protocol: TCP
+    # Allow DNS
+    - to: []
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+

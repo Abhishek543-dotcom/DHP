@@ -1,0 +1,72 @@
+# =============================================
+# Job Service — Kubernetes Deployment
+# =============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: job-service
+  namespace: lakehouse-platform
+  labels:
+    app: job-service
+    app.kubernetes.io/part-of: lakehouse-platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: job-service
+  template:
+    metadata:
+      labels:
+        app: job-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: job-service
+          image: registry.internal/lakehouse/job-service:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          envFrom:
+            - secretRef:
+                name: lakehouse-secrets
+            - configMapRef:
+                name: lakehouse-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: job-service
+  namespace: lakehouse-platform
+spec:
+  selector:
+    app: job-service
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+  type: ClusterIP
+

@@ -1,0 +1,46 @@
+# =============================================
+# Fluent Bit ConfigMap for Spark Containers
+# =============================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  namespace: lakehouse-jobs
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush           1
+        Log_Level       info
+        Daemon          Off
+
+    [INPUT]
+        Name            tail
+        Tag             spark.job
+        Path            /var/log/spark/*.log
+        Refresh_Interval 2
+        Read_from_Head  True
+
+    [FILTER]
+        Name            modify
+        Match           *
+        Add             job_id ${JOB_ID}
+        Add             container_id ${HOSTNAME}
+        Add             source driver
+
+    [OUTPUT]
+        Name            kafka
+        Match           *
+        Brokers         ${KAFKA_BROKERS}
+        Topics          spark-job-logs
+        Format          json
+        Timestamp_Key   @timestamp
+        Retry_Limit     5
+
+  parsers.conf: |
+    [PARSER]
+        Name         spark_log
+        Format       regex
+        Regex        ^\[(?<timestamp>[^\]]+)\] \[(?<level>[^\]]+)\] (?<message>.*)$
+        Time_Key     timestamp
+        Time_Format  %Y-%m-%dT%H:%M:%SZ
+

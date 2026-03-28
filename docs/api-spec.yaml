@@ -1,0 +1,595 @@
+openapi: 3.0.3
+info:
+  title: Lakehouse Platform API
+  description: |
+    End-to-end managed lakehouse framework with API-driven Spark job execution,
+    metadata management, and full observability.
+  version: 1.0.0
+  contact:
+    name: Data Platform Team
+
+servers:
+  - url: http://localhost:8001
+    description: Job Service (local dev)
+  - url: http://localhost:8002
+    description: Metadata Service (local dev)
+  - url: http://localhost:8003
+    description: Log Service (local dev)
+  - url: http://localhost:8004
+    description: Storage Service (local dev)
+
+tags:
+  - name: Jobs
+    description: Spark job submission and management
+  - name: Databases
+    description: Database/namespace management
+  - name: Tables
+    description: Table and schema management
+  - name: Logs
+    description: Per-job log retrieval
+  - name: Storage
+    description: Object storage management
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  # =============================================
+  # Job Service
+  # =============================================
+  /api/v1/jobs:
+    post:
+      tags: [Jobs]
+      summary: Submit a new Spark job
+      operationId: submitJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+      responses:
+        '202':
+          description: Job accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+    get:
+      tags: [Jobs]
+      summary: List all jobs
+      operationId: listJobs
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, QUEUED, PROVISIONING, RUNNING, SUCCESS, FAILED, CANCELLED, DEAD]
+        - name: job_type
+          in: query
+          schema:
+            type: string
+            enum: [spark_sql, spark_etl, spark_ml, spark_streaming]
+      responses:
+        '200':
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListResponse'
+
+  /api/v1/jobs/{job_id}:
+    get:
+      tags: [Jobs]
+      summary: Get job details
+      operationId: getJob
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '404':
+          description: Job not found
+    delete:
+      tags: [Jobs]
+      summary: Cancel a job
+      operationId: cancelJob
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job cancelled
+        '404':
+          description: Job not found
+
+  /api/v1/jobs/{job_id}/status:
+    put:
+      tags: [Jobs]
+      summary: Update job status (internal callback)
+      operationId: updateJobStatus
+      security:
+        - InternalTokenAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [PROVISIONING, RUNNING, SUCCESS, FAILED, CANCELLED, DEAD]
+                container_id:
+                  type: string
+                error_message:
+                  type: string
+                exit_code:
+                  type: integer
+      responses:
+        '200':
+          description: Job status updated
+        '404':
+          description: Job not found
+
+  /api/v1/jobs/{job_id}/logs:
+    get:
+      tags: [Jobs, Logs]
+      summary: Get logs for a job
+      operationId: getJobLogs
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [all, stdout, stderr, driver, executor]
+            default: all
+        - name: tail
+          in: query
+          schema:
+            type: integer
+            default: 500
+      responses:
+        '200':
+          description: Job logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogResponse'
+
+  # =============================================
+  # Metadata Service - Databases
+  # =============================================
+  /api/v1/databases:
+    post:
+      tags: [Databases]
+      summary: Create a database
+      operationId: createDatabase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatabaseCreateRequest'
+      responses:
+        '201':
+          description: Database created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseResponse'
+        '409':
+          description: Database already exists
+    get:
+      tags: [Databases]
+      summary: List databases
+      operationId: listDatabases
+      responses:
+        '200':
+          description: List of databases
+
+  /api/v1/databases/{db_name}:
+    delete:
+      tags: [Databases]
+      summary: Drop a database
+      parameters:
+        - $ref: '#/components/parameters/DbName'
+      responses:
+        '204':
+          description: Database dropped
+
+  # =============================================
+  # Metadata Service - Tables
+  # =============================================
+  /api/v1/databases/{db_name}/tables:
+    post:
+      tags: [Tables]
+      summary: Create a table
+      parameters:
+        - $ref: '#/components/parameters/DbName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableCreateRequest'
+      responses:
+        '201':
+          description: Table created
+    get:
+      tags: [Tables]
+      summary: List tables in a database
+      parameters:
+        - $ref: '#/components/parameters/DbName'
+      responses:
+        '200':
+          description: List of tables
+
+  /api/v1/databases/{db_name}/tables/{table_name}:
+    get:
+      tags: [Tables]
+      summary: Get table details
+      parameters:
+        - $ref: '#/components/parameters/DbName'
+        - $ref: '#/components/parameters/TableName'
+      responses:
+        '200':
+          description: Table details
+    put:
+      tags: [Tables]
+      summary: Alter table (schema evolution)
+      parameters:
+        - $ref: '#/components/parameters/DbName'
+        - $ref: '#/components/parameters/TableName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableUpdateRequest'
+      responses:
+        '200':
+          description: Table updated
+    delete:
+      tags: [Tables]
+      summary: Drop a table
+      parameters:
+        - $ref: '#/components/parameters/DbName'
+        - $ref: '#/components/parameters/TableName'
+      responses:
+        '204':
+          description: Table dropped
+
+  /api/v1/databases/{db_name}/tables/{table_name}/snapshots:
+    get:
+      tags: [Tables]
+      summary: Get Iceberg snapshots (time travel)
+      parameters:
+        - $ref: '#/components/parameters/DbName'
+        - $ref: '#/components/parameters/TableName'
+      responses:
+        '200':
+          description: List of snapshots
+
+  # =============================================
+  # Storage Service
+  # =============================================
+  /api/v1/storage/buckets:
+    post:
+      tags: [Storage]
+      summary: Create a bucket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BucketCreateRequest'
+      responses:
+        '201':
+          description: Bucket created
+    get:
+      tags: [Storage]
+      summary: List buckets
+      responses:
+        '200':
+          description: List of buckets
+
+  /api/v1/storage/buckets/{bucket_name}/objects:
+    get:
+      tags: [Storage]
+      summary: List objects in a bucket
+      parameters:
+        - name: bucket_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: prefix
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of objects
+
+  /api/v1/storage/buckets/{bucket_name}/presigned-url:
+    post:
+      tags: [Storage]
+      summary: Generate presigned URL
+      parameters:
+        - name: bucket_name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignedUrlRequest'
+      responses:
+        '200':
+          description: Presigned URL generated
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    InternalTokenAuth:
+      type: apiKey
+      in: header
+      name: X-Internal-Token
+
+  parameters:
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DbName:
+      name: db_name
+      in: path
+      required: true
+      schema:
+        type: string
+    TableName:
+      name: table_name
+      in: path
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    JobCreateRequest:
+      type: object
+      required: [job_name, job_type, entrypoint, submitted_by]
+      properties:
+        job_name:
+          type: string
+          example: daily_sales_etl
+        job_type:
+          type: string
+          enum: [spark_sql, spark_etl, spark_ml, spark_streaming]
+        entrypoint:
+          type: string
+          example: s3://lakehouse-scripts/etl/sales_transform.py
+        arguments:
+          type: array
+          items:
+            type: string
+          example: ["--date", "2026-03-22"]
+        spark_config:
+          type: object
+          example:
+            spark.executor.memory: "4g"
+            spark.executor.cores: 2
+        database_name:
+          type: string
+        table_name:
+          type: string
+        submitted_by:
+          type: string
+          example: data_engineering_team
+        max_retries:
+          type: integer
+          default: 3
+
+    JobResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        job_name:
+          type: string
+        job_type:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, QUEUED, PROVISIONING, RUNNING, SUCCESS, FAILED, CANCELLED, DEAD]
+        entrypoint:
+          type: string
+        submitted_by:
+          type: string
+        submitted_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        error_message:
+          type: string
+        retry_count:
+          type: integer
+        max_retries:
+          type: integer
+
+    JobListResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobResponse'
+
+    LogResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+        log_count:
+          type: integer
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+              level:
+                type: string
+              message:
+                type: string
+              source:
+                type: string
+
+    DatabaseCreateRequest:
+      type: object
+      required: [db_name]
+      properties:
+        db_name:
+          type: string
+          example: sales_db
+        owner:
+          type: string
+        description:
+          type: string
+        properties:
+          type: object
+
+    DatabaseResponse:
+      type: object
+      properties:
+        db_id:
+          type: string
+          format: uuid
+        db_name:
+          type: string
+        location:
+          type: string
+        owner:
+          type: string
+        table_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    TableCreateRequest:
+      type: object
+      required: [table_name, schema_fields]
+      properties:
+        table_name:
+          type: string
+        table_type:
+          type: string
+          default: ICEBERG
+        schema_fields:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              type:
+                type: string
+              nullable:
+                type: boolean
+              description:
+                type: string
+        partition_spec:
+          type: array
+          items:
+            type: object
+        sort_order:
+          type: array
+          items:
+            type: object
+        description:
+          type: string
+
+    TableUpdateRequest:
+      type: object
+      properties:
+        add_columns:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              type:
+                type: string
+              nullable:
+                type: boolean
+        drop_columns:
+          type: array
+          items:
+            type: string
+        rename_columns:
+          type: object
+        description:
+          type: string
+
+    BucketCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    PresignedUrlRequest:
+      type: object
+      required: [object_key]
+      properties:
+        object_key:
+          type: string
+        operation:
+          type: string
+          enum: [upload, download]
+          default: download
+        expiry:
+          type: integer
+          default: 3600
+

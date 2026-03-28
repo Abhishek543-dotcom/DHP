@@ -1,0 +1,307 @@
+# ============================================
+# Lakehouse Platform - Local Development Stack
+# ============================================
+# Usage:
+#   cd infra
+#   docker-compose -f docker-compose.dev.yaml up -d
+# ============================================
+
+services:
+  # =============================================
+  # Data Stores
+  # =============================================
+  postgres:
+    image: postgres:16
+    container_name: lakehouse-postgres
+    environment:
+      POSTGRES_DB: lakehouse
+      POSTGRES_USER: lakehouse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-db-password-change-me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lakehouse -d lakehouse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: lakehouse-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================
+  # Message Queue (Kafka + Zookeeper)
+  # =============================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: lakehouse-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: lakehouse-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # =============================================
+  # Object Storage (MinIO - S3 Compatible)
+  # =============================================
+  minio:
+    image: minio/minio
+    container_name: lakehouse-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-dev-access-key-change-me}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-dev-secret-key-change-me}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Create default buckets on startup
+  minio-init:
+    image: minio/mc
+    container_name: lakehouse-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set lakehouse http://minio:9000 ${S3_ACCESS_KEY:-dev-access-key-change-me} ${S3_SECRET_KEY:-dev-secret-key-change-me};
+      mc mb --ignore-existing lakehouse/lakehouse-warehouse;
+      mc mb --ignore-existing lakehouse/lakehouse-raw;
+      mc mb --ignore-existing lakehouse/lakehouse-scripts;
+      mc mb --ignore-existing lakehouse/lakehouse-logs;
+      echo 'MinIO buckets created successfully';
+      exit 0;
+      "
+
+  # =============================================
+  # Log Stack (Loki + Grafana)
+  # =============================================
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: lakehouse-loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - lokidata:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: lakehouse-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+    volumes:
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      - loki
+
+  # =============================================
+  # Application Services
+  # =============================================
+  job-service:
+    build:
+      context: ../services/job-service
+      dockerfile: Dockerfile
+    container_name: lakehouse-job-service
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://lakehouse:${POSTGRES_PASSWORD:-dev-db-password-change-me}@postgres:5432/lakehouse"
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      LOG_SERVICE_URL: http://log-service:8000
+      LOG_SERVICE_API_KEY: ${API_KEY:-dev-api-key-change-me}
+      CALLBACK_URL: http://job-service:8000
+      API_KEY: ${API_KEY:-dev-api-key-change-me}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev-internal-token-change-me}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004}
+      AUTO_CREATE_TABLES: "true"
+      DEBUG: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  metadata-service:
+    build:
+      context: ../services/metadata-service
+      dockerfile: Dockerfile
+    container_name: lakehouse-metadata-service
+    ports:
+      - "8002:8000"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://lakehouse:${POSTGRES_PASSWORD:-dev-db-password-change-me}@postgres:5432/lakehouse"
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-dev-access-key-change-me}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-dev-secret-key-change-me}
+      S3_WAREHOUSE_BUCKET: lakehouse-warehouse
+      API_KEY: ${API_KEY:-dev-api-key-change-me}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004}
+      AUTO_CREATE_TABLES: "true"
+      DEBUG: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  log-service:
+    build:
+      context: ../services/log-service
+      dockerfile: Dockerfile
+    container_name: lakehouse-log-service
+    ports:
+      - "8003:8000"
+    environment:
+      LOKI_URL: http://loki:3100
+      API_KEY: ${API_KEY:-dev-api-key-change-me}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004}
+      DEBUG: "false"
+    depends_on:
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  storage-service:
+    build:
+      context: ../services/storage-service
+      dockerfile: Dockerfile
+    container_name: lakehouse-storage-service
+    ports:
+      - "8004:8000"
+    environment:
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-dev-access-key-change-me}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-dev-secret-key-change-me}
+      S3_REGION: us-east-1
+      API_KEY: ${API_KEY:-dev-api-key-change-me}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004}
+      DEBUG: "false"
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  orchestrator:
+    build:
+      context: ../services/orchestrator
+      dockerfile: Dockerfile
+    container_name: lakehouse-orchestrator
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      JOB_SERVICE_URL: ${JOB_SERVICE_URL:-http://job-service:8000}
+      RUNTIME_KAFKA_BROKERS: ${RUNTIME_KAFKA_BROKERS:-host.docker.internal:29092}
+      RUNTIME_JOB_SERVICE_URL: ${RUNTIME_JOB_SERVICE_URL:-http://host.docker.internal:8001}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev-internal-token-change-me}
+      S3_ENDPOINT: http://minio:9000
+      RUNTIME_S3_ENDPOINT: ${RUNTIME_S3_ENDPOINT:-http://host.docker.internal:9000}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-dev-access-key-change-me}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-dev-secret-key-change-me}
+      K8S_IN_CLUSTER: "false"
+      SPARK_IMAGE: lakehouse-spark:3.5.0
+      K8S_NAMESPACE: lakehouse-jobs
+      K8S_HOST_ALIAS: ${K8S_HOST_ALIAS:-host.docker.internal}
+      K8S_SKIP_TLS_VERIFY: ${K8S_SKIP_TLS_VERIFY:-true}
+      DEFAULT_CPU_REQUEST: ${DEFAULT_CPU_REQUEST:-250m}
+      DEFAULT_CPU_LIMIT: ${DEFAULT_CPU_LIMIT:-1000m}
+      DEFAULT_MEMORY_REQUEST: ${DEFAULT_MEMORY_REQUEST:-512Mi}
+      DEFAULT_MEMORY_LIMIT: ${DEFAULT_MEMORY_LIMIT:-2Gi}
+      ENABLE_FLUENT_BIT_SIDECAR: ${ENABLE_FLUENT_BIT_SIDECAR:-false}
+    volumes:
+      - ${HOME}/.kube:/root/.kube:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      job-service:
+        condition: service_healthy
+
+# =============================================
+# Volumes
+# =============================================
+volumes:
+  pgdata:
+    driver: local
+  miniodata:
+    driver: local
+  lokidata:
+    driver: local
+  grafanadata:
+    driver: local
+
+# =============================================
+# Networks
+# =============================================
+networks:
+  default:
+    name: lakehouse-network
+

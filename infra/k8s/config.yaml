@@ -1,0 +1,38 @@
+# =============================================
+# Lakehouse ConfigMap — Shared Configuration
+# =============================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lakehouse-config
+  namespace: lakehouse-platform
+data:
+  KAFKA_BROKERS: "kafka.lakehouse-platform.svc.cluster.local:9092"
+  REDIS_URL: "redis://redis.lakehouse-platform.svc.cluster.local:6379"
+  S3_ENDPOINT: "http://minio.lakehouse-platform.svc.cluster.local:9000"
+  S3_WAREHOUSE_BUCKET: "lakehouse-warehouse"
+  S3_REGION: "us-east-1"
+  LOKI_URL: "http://loki.lakehouse-platform.svc.cluster.local:3100"
+  LOG_SERVICE_URL: "http://log-service.lakehouse-platform.svc.cluster.local:8000"
+  JOB_SERVICE_URL: "http://job-service.lakehouse-platform.svc.cluster.local:8000"
+  K8S_NAMESPACE: "lakehouse-jobs"
+  SPARK_IMAGE: "lakehouse-spark:3.5.0"
+  CORS_ALLOWED_ORIGINS: "https://your-ui.example.com"
+---
+# =============================================
+# Lakehouse Secrets
+# =============================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: lakehouse-secrets
+  namespace: lakehouse-platform
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql+asyncpg://lakehouse:CHANGE_ME@postgres.lakehouse-platform.svc.cluster.local:5432/lakehouse"
+  S3_ACCESS_KEY: "CHANGE_ME"
+  S3_SECRET_KEY: "CHANGE_ME"
+  API_KEY: "CHANGE_ME"
+  INTERNAL_API_TOKEN: "CHANGE_ME"
+  LOG_SERVICE_API_KEY: "CHANGE_ME"
+
