@@ -12,6 +12,7 @@ data:
         Flush           1
         Log_Level       info
         Daemon          Off
+        Parsers_File    /fluent-bit/etc/parsers.conf
 
     [INPUT]
         Name            tail
@@ -19,6 +20,8 @@ data:
         Path            /var/log/spark/*.log
         Refresh_Interval 2
         Read_from_Head  True
+        DB              /tmp/flb_tail.db
+        Exit_On_Eof     True
 
     [FILTER]
         Name            modify
@@ -28,13 +31,18 @@ data:
         Add             source driver
 
     [OUTPUT]
-        Name            kafka
+        Name            loki
         Match           *
-        Brokers         ${KAFKA_BROKERS}
-        Topics          spark-job-logs
-        Format          json
-        Timestamp_Key   @timestamp
+        Host            host.docker.internal
+        Port            3100
+        Labels          job_id=${JOB_ID},source=driver,container_id=${HOSTNAME}
+        Line_Format     json
         Retry_Limit     5
+
+    [OUTPUT]
+        Name            stdout
+        Match           *
+        Format          json_lines
 
   parsers.conf: |
     [PARSER]
