@@ -1,29 +1,44 @@
 # Code of Conduct
 
-## Our Pledge
+## Our Commitment
 
-We as contributors and maintainers pledge to make participation in our project a harassment-free experience for everyone.
+We are committed to a respectful, inclusive, and harassment-free community for everyone participating in this project.
 
-## Our Standards
+## Expected Behavior
 
-Examples of behavior that contributes to a positive environment include:
-- Being respectful and inclusive
-- Giving and accepting constructive feedback
-- Focusing on what is best for the community
+- Be respectful in all interactions.
+- Give constructive, actionable feedback.
+- Assume positive intent and ask clarifying questions.
+- Focus on technical issues rather than personal criticism.
+- Support new contributors and different experience levels.
 
-Examples of unacceptable behavior include:
-- Harassment, discrimination, or personal attacks
-- Trolling, insulting, or derogatory comments
-- Public or private abuse of any community member
+## Unacceptable Behavior
 
-## Enforcement
-
-Project maintainers are responsible for clarifying and enforcing our standards and may take corrective action for unacceptable behavior.
+- Harassment, discrimination, intimidation, or abuse
+- Personal attacks, insults, or derogatory language
+- Trolling, deliberate disruption, or hostile conduct
+- Sharing private information without consent
 
 ## Scope
 
-This Code of Conduct applies within all project spaces, including issues, pull requests, and community channels.
+This Code of Conduct applies to all project spaces, including:
+
+- GitHub issues and pull requests
+- Code reviews and discussions
+- Related community communication channels
 
 ## Reporting
 
-Report incidents to the project maintainers privately. All reports will be reviewed and investigated promptly and fairly.
+If you experience or witness unacceptable behavior, report it privately to project maintainers.
+
+Please include:
+
+- What happened
+- Where and when it happened
+- Any supporting context
+
+All reports will be reviewed promptly and handled with discretion.
+
+## Enforcement
+
+Maintainers may take any action needed to protect contributors and the project, including warnings, content moderation, temporary restrictions, or removal from participation.
