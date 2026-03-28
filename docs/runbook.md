@@ -1,95 +1,101 @@
-# Lakehouse Platform — Runbook
+# Lakehouse Platform Runbook
 
-## Local Development
+This runbook is for operators and developers running the platform in local dev or validating production-like behavior.
 
-### Prerequisites
-- Docker Desktop with Docker Compose
+## 1. Prerequisites
+
+- Docker Desktop running
 - Python 3.11+
-- kubectl with a reachable local Kubernetes cluster (`kubectl cluster-info`)
-- `~/.kube/config` present (mounted into the orchestrator container)
+- `kubectl` configured and healthy
+- `~/.kube/config` available
 
-### Start Infrastructure
+Validation:
+
 ```bash
-cd infra
-docker-compose -f docker-compose.dev.yaml up -d
+docker --version
+kubectl cluster-info
 ```
 
-### Verify Services
+## 2. Start and Stop Procedures
+
+### 2.1 Start Stack
+
 ```bash
-# Health checks
-curl http://localhost:8001/health   # Job Service
-curl http://localhost:8002/health   # Metadata Service
-curl http://localhost:8003/health   # Log Service
-curl http://localhost:8004/health   # Storage Service
-
-# Service docs
-open http://localhost:8001/docs     # Job Service Swagger
-open http://localhost:8002/docs     # Metadata Service Swagger
-open http://localhost:8003/docs     # Log Service Swagger
-open http://localhost:8004/docs     # Storage Service Swagger
-
-# Infrastructure UIs
-open http://localhost:9001          # MinIO Console (see S3_ACCESS_KEY/S3_SECRET_KEY in .env)
-open http://localhost:3000          # Grafana (admin/admin)
+cp .env.example .env
+make build-spark
+make up
 ```
 
-## Common Operations
+### 2.2 Stop Stack
 
-Set API key once for all requests:
+```bash
+make down
+```
+
+### 2.3 Full Cleanup
+
+```bash
+make clean
+```
+
+## 3. Health Verification
+
+### 3.1 API Health
+
+```bash
+curl -s http://localhost:8001/health
+curl -s http://localhost:8001/health/ready
+curl -s http://localhost:8002/health
+curl -s http://localhost:8003/health
+curl -s http://localhost:8004/health
+```
+
+### 3.2 Infra Health
+
+```bash
+curl -s http://localhost:3100/ready
+curl -s http://localhost:9090/-/healthy
+curl -s http://localhost:3000/api/health
+curl -s http://localhost:9000/minio/health/live
+```
+
+### 3.3 Metrics Endpoints
+
+```bash
+curl -s http://localhost:8001/metrics | head
+curl -s http://localhost:8002/metrics | head
+curl -s http://localhost:8003/metrics | head
+curl -s http://localhost:8004/metrics | head
+```
+
+## 4. Authentication Setup
+
 ```bash
 export API_KEY="${API_KEY:-dev-api-key-change-me}"
+export INTERNAL_TOKEN="${INTERNAL_API_TOKEN:-dev-internal-token-change-me}"
 ```
 
-### Submit a Spark Job
-```bash
-curl -X POST http://localhost:8001/api/v1/jobs \
-  -H "X-API-Key: ${API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "job_name": "daily_sales_etl",
-    "job_type": "spark_etl",
-    "entrypoint": "s3://lakehouse-scripts/etl/sales_transform.py",
-    "arguments": ["--date", "2026-03-24", "--mode", "incremental"],
-    "spark_config": {
-      "spark.executor.memory": "4g",
-      "spark.executor.cores": 2
-    },
-    "database_name": "sales_db",
-    "table_name": "transactions",
-    "submitted_by": "data_engineering"
-  }'
-```
+## 5. Functional Smoke Test
 
-### Check Job Status
-```bash
-curl -H "X-API-Key: ${API_KEY}" http://localhost:8001/api/v1/jobs/{job_id}
-```
+### 5.1 Metadata Setup
 
-### Get Job Logs
-```bash
-curl -H "X-API-Key: ${API_KEY}" http://localhost:8001/api/v1/jobs/{job_id}/logs?source=driver\&tail=500
-```
+Create database:
 
-### Cancel a Job
 ```bash
-curl -X DELETE -H "X-API-Key: ${API_KEY}" http://localhost:8001/api/v1/jobs/{job_id}
-```
-
-### Create a Database
-```bash
-curl -X POST http://localhost:8002/api/v1/databases \
+curl -s -X POST http://localhost:8002/api/v1/databases/ \
   -H "X-API-Key: ${API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
     "db_name": "sales_db",
-    "owner": "data_engineering",
-    "description": "Sales data warehouse"
+    "owner": "platform_ops",
+    "description": "Sales domain"
   }'
 ```
 
-### Create a Table
+Create table:
+
 ```bash
-curl -X POST http://localhost:8002/api/v1/databases/sales_db/tables \
+curl -s -X POST http://localhost:8002/api/v1/databases/sales_db/tables/ \
   -H "X-API-Key: ${API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
@@ -97,80 +103,252 @@ curl -X POST http://localhost:8002/api/v1/databases/sales_db/tables \
     "table_type": "ICEBERG",
     "schema_fields": [
       {"name": "id", "type": "long", "nullable": false},
-      {"name": "amount", "type": "decimal", "nullable": false},
-      {"name": "currency", "type": "string", "nullable": true},
-      {"name": "transaction_date", "type": "timestamp", "nullable": false}
+      {"name": "amount", "type": "double", "nullable": false},
+      {"name": "txn_date", "type": "string", "nullable": false}
     ],
-    "partition_spec": [{"field": "transaction_date", "transform": "day"}],
-    "description": "Sales transactions"
+    "partition_spec": [{"field": "txn_date", "transform": "day"}]
   }'
 ```
 
-### Schema Evolution (Add Column)
+### 5.2 Storage Setup
+
 ```bash
-curl -X PUT http://localhost:8002/api/v1/databases/sales_db/tables/transactions \
+curl -s -X POST http://localhost:8004/api/v1/storage/buckets \
+  -H "X-API-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"ops-smoke-bucket"}'
+```
+
+### 5.3 Submit Spark Job
+
+```bash
+curl -s -X POST http://localhost:8001/api/v1/jobs/ \
   -H "X-API-Key: ${API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
-    "add_columns": [
-      {"name": "region", "type": "string", "nullable": true}
-    ],
-    "changed_by": "data_engineering"
+    "job_name": "sample_etl_smoke",
+    "job_type": "spark_etl",
+    "entrypoint": "s3://lakehouse-scripts/etl/sales_transform.py",
+    "arguments": ["--date", "2026-03-28", "--mode", "append"],
+    "spark_config": {
+      "spark.executor.memory": "1g",
+      "spark.executor.cores": 1,
+      "spark.executor.instances": 1
+    },
+    "database_name": "sales_db",
+    "table_name": "transactions",
+    "submitted_by": "runbook",
+    "max_retries": 1
   }'
 ```
 
-### List Storage Buckets
+Store returned `job_id` and poll status:
+
 ```bash
-curl -H "X-API-Key: ${API_KEY}" http://localhost:8004/api/v1/storage/buckets
+JOB_ID="<paste_job_id_here>"
+watch -n 2 "curl -s -H 'X-API-Key: ${API_KEY}' http://localhost:8001/api/v1/jobs/${JOB_ID} | jq '{job_id,status,retry_count,error_message}'"
 ```
 
-### Get Presigned Upload URL
+Fetch logs:
+
 ```bash
-curl -X POST http://localhost:8004/api/v1/storage/buckets/lakehouse-raw/presigned-url \
-  -H "X-API-Key: ${API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "object_key": "sales/2026-03-24/data.parquet",
-    "operation": "upload",
-    "expiry": 3600
-  }'
+curl -s -H "X-API-Key: ${API_KEY}" \
+  "http://localhost:8001/api/v1/jobs/${JOB_ID}/logs?source=all&tail=200" | jq .
 ```
 
-## Troubleshooting
+## 6. Batch Execution: 10 Spark Jobs
 
-### Service won't start
-1. Check Docker logs: `docker logs lakehouse-job-service`
-2. Verify PostgreSQL is ready: `docker exec lakehouse-postgres pg_isready`
-3. Verify Kafka is ready: `docker exec lakehouse-kafka kafka-topics --bootstrap-server localhost:9092 --list`
+You can submit all `batch10` jobs via API and track lifecycle.
+Before submission, ensure `job_1.py` ... `job_10.py` are available under `s3://lakehouse-scripts/batch10/`.
 
-### Job stuck in PENDING
-1. Check Kafka consumer is running: look at orchestrator logs
-2. Verify Kafka topic exists: `docker exec lakehouse-kafka kafka-topics --bootstrap-server localhost:9092 --list`
-3. Check Job Service can reach Kafka
+```bash
+for i in $(seq 1 10); do
+  curl -s -X POST http://localhost:8001/api/v1/jobs/ \
+    -H "X-API-Key: ${API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"job_name\": \"batch10_job_${i}\",
+      \"job_type\": \"spark_etl\",
+      \"entrypoint\": \"s3://lakehouse-scripts/batch10/job_${i}.py\",
+      \"arguments\": [\"--records\", \"1200\", \"--tag\", \"batch10\"],
+      \"spark_config\": {
+        \"spark.executor.memory\": \"1g\",
+        \"spark.executor.cores\": 1,
+        \"spark.executor.instances\": 1
+      },
+      \"submitted_by\": \"runbook_batch\",
+      \"max_retries\": 1
+    }" | jq -r '.job_id'
+done
+```
 
-### Job fails with `localhost:80` / namespace API errors
-1. Verify local K8s is running: `kubectl cluster-info`
-2. Confirm kubeconfig exists: `ls ~/.kube/config`
-3. Restart orchestrator after kubeconfig changes: `docker compose -f infra/docker-compose.dev.yaml up -d --build orchestrator`
-4. If you see TLS hostname mismatch errors, keep `K8S_SKIP_TLS_VERIFY=true` for local Docker mode
+Track all recent jobs:
 
-### Spark pods stay Pending (`Insufficient memory`)
-1. Lower local default resources in `infra/docker-compose.dev.yaml` (`DEFAULT_MEMORY_REQUEST`, `DEFAULT_MEMORY_LIMIT`, `DEFAULT_CPU_REQUEST`)
-2. Recreate orchestrator: `docker compose -f infra/docker-compose.dev.yaml up -d --force-recreate orchestrator`
-3. Submit a new job and inspect pod events: `kubectl describe pod <pod-name> -n lakehouse-jobs`
+```bash
+curl -s -H "X-API-Key: ${API_KEY}" "http://localhost:8001/api/v1/jobs/?page=1&page_size=50" \
+  | jq '.jobs[] | {job_id,job_name,status,retry_count,submitted_at}'
+```
 
-### No logs for a job
-1. Check Fluent Bit sidecar is running in the Spark pod
-2. Verify Loki is receiving logs: `curl http://localhost:3100/ready`
-3. Check Kafka topic `spark-job-logs` has messages
+## 7. Kubernetes Runtime Checks
 
-## Metrics & Monitoring
+### 7.1 Inspect Spark Jobs and Pods
 
-- **Prometheus metrics**: `http://localhost:{port}/metrics` on each service
-- **Grafana dashboards**: `http://localhost:3000`
-- Key metrics to watch:
-  - `http_requests_total` — API request rates
-  - `http_request_duration_seconds` — API latency
-  - Job success/failure rates (custom metric)
-  - Kafka consumer lag
+```bash
+kubectl get jobs -n lakehouse-jobs
+kubectl get pods -n lakehouse-jobs
+```
 
+### 7.2 Pod Logs
+
+```bash
+kubectl logs -n lakehouse-jobs <pod-name> -c spark-<jobid8>
+kubectl logs -n lakehouse-jobs <pod-name> -c fluent-bit
+```
+
+### 7.3 Pod Events
+
+```bash
+kubectl describe pod -n lakehouse-jobs <pod-name>
+```
+
+## 8. Grafana and Prometheus Operations
+
+### 8.1 Grafana Dashboard
+
+- URL: `http://localhost:3000/d/lakehouse-admin-ops/lakehouse-platform-admin-operations-overview`
+- Login: `admin/admin`
+
+### 8.2 Prometheus Target Health
+
+```bash
+curl -s http://localhost:9090/api/v1/targets \
+  | jq '{active:(.data.activeTargets|length), healthy:(.data.activeTargets|map(select(.health=="up"))|length), unhealthy:(.data.activeTargets|map(select(.health!="up"))|length)}'
+```
+
+### 8.3 Key Queries
+
+Request rate by service:
+
+```promql
+sum by (job) (rate(http_requests_total{job=~"job-service|metadata-service|log-service|storage-service"}[5m]))
+```
+
+P95 latency by service:
+
+```promql
+histogram_quantile(0.95, sum by (job, le) (rate(http_request_duration_highr_seconds_bucket{job=~"job-service|metadata-service|log-service|storage-service"}[5m])))
+```
+
+## 9. Troubleshooting Playbooks
+
+### 9.1 Jobs Stay `PENDING` or `QUEUED`
+
+Checks:
+
+```bash
+docker logs lakehouse-kafka --tail 100
+docker logs lakehouse-orchestrator --tail 200
+```
+
+Fixes:
+
+- Confirm Kafka health and topic auto-creation.
+- Confirm orchestrator is running and can consume.
+
+### 9.2 Orchestrator Cannot Reach Kubernetes
+
+Symptoms:
+
+- errors around kube config, API host, or TLS verification
+
+Checks:
+
+```bash
+kubectl cluster-info
+docker logs lakehouse-orchestrator --tail 200 | rg -n "kube|tls|host|namespace"
+```
+
+Fixes:
+
+- Ensure `~/.kube/config` exists.
+- Keep `K8S_HOST_ALIAS=host.docker.internal` in local docker mode.
+- Keep `K8S_SKIP_TLS_VERIFY=true` for local-only setup.
+
+### 9.3 Spark Pods Pending (Resources)
+
+Checks:
+
+```bash
+kubectl get pods -n lakehouse-jobs
+kubectl describe pod -n lakehouse-jobs <pod-name> | rg -n "Insufficient|FailedScheduling"
+```
+
+Fixes:
+
+- Reduce orchestrator defaults in compose env:
+  - `DEFAULT_CPU_REQUEST`
+  - `DEFAULT_CPU_LIMIT`
+  - `DEFAULT_MEMORY_REQUEST`
+  - `DEFAULT_MEMORY_LIMIT`
+
+### 9.4 Missing Logs in Job API
+
+Checks:
+
+```bash
+curl -s http://localhost:3100/ready
+docker logs lakehouse-log-service --tail 200
+docker logs lakehouse-loki --tail 200
+```
+
+Fixes:
+
+- Confirm Loki is healthy.
+- Confirm Spark runtime produced log file.
+- Confirm Fluent Bit sidecar enabled if relying on sidecar shipping.
+
+### 9.5 Metadata or Job DB Errors
+
+Checks:
+
+```bash
+docker exec lakehouse-postgres pg_isready -U lakehouse -d lakehouse
+docker logs lakehouse-job-service --tail 200
+docker logs lakehouse-metadata-service --tail 200
+```
+
+Fixes:
+
+- Re-init schema: `make db-init`
+- Reset schema (destructive): `make db-reset`
+
+## 10. Postman Validation
+
+Use the collection in `docs/postman` and run folders in order:
+
+1. Metadata Service
+2. Storage Service
+3. Job Service
+4. Log Service
+
+Run `Log Streaming (Manual)` separately because it uses SSE.
+
+## 11. Kubernetes Manifests
+
+Deploy manifests:
+
+```bash
+make k8s-deploy
+```
+
+Remove manifests:
+
+```bash
+make k8s-delete
+```
+
+## 12. Operational Notes
+
+- Local compose includes Prometheus and blackbox exporter.
+- Grafana provisions datasources and dashboard on startup.
+- The Spark image tag is expected to match `SPARK_IMAGE` in orchestrator config.

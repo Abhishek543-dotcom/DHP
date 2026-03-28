@@ -1,119 +1,208 @@
 # Lakehouse Platform
 
-An end-to-end managed lakehouse framework with API-driven Spark job execution, 
-metadata management, and full observability.
+Lakehouse Platform is an API-first data platform for running Spark jobs with strong operational controls:
 
-## Architecture
+- Job submission, cancellation, status tracking, and retries
+- Metadata catalog for databases and tables (schema evolution included)
+- Object storage management for S3/MinIO
+- Centralized logs and metrics with Grafana dashboards
+- Kubernetes-backed isolated Spark runtime per job
 
-- **Job Service** — Submit, manage, and monitor Spark jobs via REST API
-- **Log Service** — Per-job log retrieval by Job ID
-- **Metadata Service** — Database, table, schema CRUD with Iceberg catalog
-- **Storage Service** — Object storage management (S3/MinIO)
-- **Orchestrator** — Container lifecycle management on Kubernetes
-- **Spark Containers** — Isolated Spark execution per job
+This repository is optimized for local development while preserving production-like patterns (event-driven orchestration, health probes, observability, and service separation).
 
-## Tech Stack
+## Core Components
 
-| Component | Technology |
-|---|---|
-| API Framework | FastAPI (Python 3.11+) |
-| Message Queue | Apache Kafka |
-| Container Runtime | Kubernetes / Docker |
-| Spark | Apache Spark 3.5+ |
-| Table Format | Apache Iceberg |
-| Object Storage | S3 / MinIO |
-| Metastore DB | PostgreSQL 16 |
-| Log Pipeline | Fluent Bit → Kafka → Loki |
-| Caching | Redis |
-| Monitoring | Prometheus + Grafana |
+| Component | Port | Purpose |
+|---|---:|---|
+| Job Service | 8001 | Submit/list/get/cancel jobs and read logs |
+| Metadata Service | 8002 | Manage databases, tables, schema, snapshots |
+| Log Service | 8003 | Retrieve/stream job logs from Loki |
+| Storage Service | 8004 | Manage buckets, objects, presigned URLs |
+| Orchestrator | N/A | Consumes Kafka events and creates K8s Spark Jobs |
+| Grafana | 3000 | Dashboards and platform observability |
+| Prometheus | 9090 | Metrics scraping and probing |
+| Loki | 3100 | Log storage and query backend |
+| MinIO API | 9000 | S3-compatible object storage endpoint |
+| MinIO Console | 9001 | MinIO admin UI |
+| Kafka | 9092/29092 | Job queue and async event backbone |
+| PostgreSQL | 5432 | Job and catalog metadata persistence |
+| Redis | 6379 | Service cache / future coordination |
 
-## Quick Start (Local Dev)
+## High-Level Flow
+
+1. Client submits a job to `POST /api/v1/jobs`.
+2. Job Service stores it in PostgreSQL and publishes to Kafka topic `spark-job-submissions`.
+3. Orchestrator consumes the event and creates a Kubernetes Job running the Spark image.
+4. Spark container reports `RUNNING` and final status (`SUCCESS` or `FAILED`) to Job Service via internal callback.
+5. Failed jobs are retried until `max_retries`; terminal failures become `DEAD`.
+6. Logs are shipped to Loki and retrieved via Job Service or Log Service APIs.
+
+## Prerequisites
+
+- Docker Desktop (with Compose)
+- Python 3.11+
+- `kubectl` configured to a reachable local cluster
+- `~/.kube/config` present (mounted into orchestrator container)
+
+## Quick Start
 
 ```bash
-# Create env from template (includes dev API keys)
 cp .env.example .env
 
-# Ensure local Kubernetes is running (required for Spark job execution)
+# Required for Spark runtime jobs created by orchestrator
 kubectl cluster-info
 
-# Start all infrastructure services
-cd infra
-docker-compose -f docker-compose.dev.yaml up -d
+# Build Spark runtime image used by orchestrator (required once, or after changes)
+make build-spark
 
-# Start individual services (for development)
-cd services/job-service
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8001
-
-cd services/log-service
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8003
-
-cd services/metadata-service
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8002
-
-cd services/storage-service
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8004
+# Start full local stack
+make up
 ```
 
-`orchestrator` uses your local kubeconfig from `~/.kube/config`, rewrites loopback API hosts to `host.docker.internal`, and disables K8s TLS hostname verification in local Docker mode (`K8S_SKIP_TLS_VERIFY=true`).
+After startup:
 
-## Authentication
+- Job Service docs: `http://localhost:8001/docs`
+- Metadata Service docs: `http://localhost:8002/docs`
+- Log Service docs: `http://localhost:8003/docs`
+- Storage Service docs: `http://localhost:8004/docs`
+- Grafana: `http://localhost:3000` (`admin` / `admin`)
+- Prometheus: `http://localhost:9090`
+- MinIO Console: `http://localhost:9001`
 
-- All business endpoints require `X-API-Key` (configured via `API_KEY`).
-- Internal status callback endpoint requires `X-Internal-Token`.
-- Health endpoints (`/health`, `/health/ready`) are intentionally unauthenticated.
+## Authentication Model
 
-## API Endpoints
+- Business APIs use `X-API-Key`.
+- Internal callback endpoint `PUT /api/v1/jobs/{job_id}/status` uses `X-Internal-Token`.
+- Health endpoints are intentionally unauthenticated.
 
-### Job Service (port 8001)
-- `POST /api/v1/jobs` — Submit a new Spark job
-- `GET /api/v1/jobs` — List all jobs
-- `GET /api/v1/jobs/{job_id}` — Get job details
-- `DELETE /api/v1/jobs/{job_id}` — Cancel a job
-- `GET /api/v1/jobs/{job_id}/logs` — Get job logs
+Defaults come from `.env`:
 
-### Metadata Service (port 8002)
-- `POST /api/v1/databases` — Create database
-- `GET /api/v1/databases` — List databases
-- `DELETE /api/v1/databases/{db_name}` — Drop database
-- `POST /api/v1/databases/{db_name}/tables` — Create table
-- `GET /api/v1/databases/{db_name}/tables` — List tables
-- `GET /api/v1/databases/{db_name}/tables/{table_name}` — Get table details
-- `PUT /api/v1/databases/{db_name}/tables/{table_name}` — Alter table
-- `DELETE /api/v1/databases/{db_name}/tables/{table_name}` — Drop table
-- `GET /api/v1/databases/{db_name}/tables/{table_name}/snapshots` — Table snapshots
+- `API_KEY=dev-api-key-change-me`
+- `INTERNAL_API_TOKEN=dev-internal-token-change-me`
 
-### Log Service (port 8003)
-- `GET /api/v1/logs/{job_id}` — Get logs by job ID
-- `GET /api/v1/logs/{job_id}/stream` — Stream logs (SSE)
+## API Surface
 
-### Storage Service (port 8004)
-- `POST /api/v1/storage/buckets` — Create bucket
-- `GET /api/v1/storage/buckets` — List buckets
-- `GET /api/v1/storage/buckets/{name}/objects` — List objects
-- `POST /api/v1/storage/buckets/{name}/presigned-url` — Get presigned URL
-- `DELETE /api/v1/storage/buckets/{name}/objects/{key}` — Delete object
+### Job Service (`http://localhost:8001`)
 
-## Project Structure
+- `GET /health`
+- `GET /health/ready`
+- `POST /api/v1/jobs/`
+- `GET /api/v1/jobs/`
+- `GET /api/v1/jobs/{job_id}`
+- `DELETE /api/v1/jobs/{job_id}`
+- `PUT /api/v1/jobs/{job_id}/status` (internal)
+- `GET /api/v1/jobs/{job_id}/logs`
 
+### Metadata Service (`http://localhost:8002`)
+
+- `GET /health`
+- `POST /api/v1/databases/`
+- `GET /api/v1/databases/`
+- `GET /api/v1/databases/{db_name}`
+- `DELETE /api/v1/databases/{db_name}`
+- `POST /api/v1/databases/{db_name}/tables/`
+- `GET /api/v1/databases/{db_name}/tables/`
+- `GET /api/v1/databases/{db_name}/tables/{table_name}`
+- `PUT /api/v1/databases/{db_name}/tables/{table_name}`
+- `DELETE /api/v1/databases/{db_name}/tables/{table_name}`
+- `GET /api/v1/databases/{db_name}/tables/{table_name}/snapshots`
+
+### Log Service (`http://localhost:8003`)
+
+- `GET /health`
+- `GET /api/v1/logs/{job_id}`
+- `GET /api/v1/logs/{job_id}/stream` (SSE)
+
+### Storage Service (`http://localhost:8004`)
+
+- `GET /health`
+- `POST /api/v1/storage/buckets`
+- `GET /api/v1/storage/buckets`
+- `GET /api/v1/storage/buckets/{bucket_name}/objects`
+- `POST /api/v1/storage/buckets/{bucket_name}/presigned-url`
+- `DELETE /api/v1/storage/buckets/{bucket_name}/objects/{object_key}`
+
+## Spark Jobs in This Repo
+
+- Sample ETL: `spark-images/jobs/sample_etl.py`
+- Batch test suite: `spark-images/jobs/batch10/job_1.py` ... `job_10.py`
+
+Use `entrypoint` values like:
+
+- `s3://lakehouse-scripts/etl/sales_transform.py` (sample style)
+- `s3://lakehouse-scripts/batch10/job_1.py` (batch suite style)
+
+The runtime entrypoint script converts `s3://` to `s3a://` automatically and injects Spark/Iceberg/S3 settings.
+Make sure these scripts are uploaded to the `lakehouse-scripts` bucket before submitting jobs.
+
+## Observability
+
+Grafana ships with a provisioned admin dashboard:
+
+- URL: `http://localhost:3000/d/lakehouse-admin-ops/lakehouse-platform-admin-operations-overview`
+- UID: `lakehouse-admin-ops`
+- Folder: `Lakehouse Admin`
+
+The dashboard includes:
+
+- HTTP and TCP blackbox probes
+- Service scrape status (`up`)
+- API throughput, error rate, and P95 latency
+- CPU, memory, and open file descriptors per service
+- Job API activity and log volume panels
+- Recent error logs from Loki
+
+## Postman Assets
+
+Importable artifacts are under `docs/postman/`:
+
+- `lakehouse-platform.postman_collection.json`
+- `lakehouse-platform.local.postman_environment.json`
+
+See `docs/postman/README.md` for run order and environment variable details.
+
+## Useful Make Targets
+
+```bash
+make help
+make up
+make down
+make logs
+make build
+make build-spark
+make test
+make db-init
+make db-reset
 ```
-lakehouse-platform/
-├── services/
-│   ├── job-service/          # Job management API
-│   ├── log-service/          # Log retrieval API
-│   ├── metadata-service/     # Catalog/metadata API
-│   ├── storage-service/      # Object storage API
-│   └── orchestrator/         # Job orchestration engine
-├── spark-images/
-│   ├── base/                 # Base Spark Docker image
-│   └── jobs/                 # Sample Spark jobs
+
+## Repository Layout
+
+```text
+.
+├── docs/
+│   ├── architecture.md
+│   ├── runbook.md
+│   └── postman/
 ├── infra/
-│   ├── k8s/                  # Kubernetes manifests
-│   └── docker-compose.dev.yaml
-├── scripts/                  # DB init, seed scripts
-└── docs/                     # Architecture docs
+│   ├── docker-compose.dev.yaml
+│   ├── prometheus/
+│   ├── grafana/
+│   └── k8s/
+├── services/
+│   ├── job-service/
+│   ├── metadata-service/
+│   ├── log-service/
+│   ├── storage-service/
+│   └── orchestrator/
+├── spark-images/
+│   ├── base/
+│   └── jobs/
+└── scripts/
 ```
 
+## Additional Documentation
+
+- Architecture details: `docs/architecture.md`
+- Operations runbook: `docs/runbook.md`
+- Contributing guide: `CONTRIBUTING.md`
+- Security policy: `SECURITY.md`
