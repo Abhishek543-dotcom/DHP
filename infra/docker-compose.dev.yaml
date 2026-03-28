@@ -129,6 +129,34 @@ services:
       timeout: 5s
       retries: 5
 
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: lakehouse-blackbox-exporter
+    command:
+      - "--config.file=/etc/blackbox_exporter/config.yml"
+    volumes:
+      - ./prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "9115:9115"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: lakehouse-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    depends_on:
+      - blackbox-exporter
+      - job-service
+      - metadata-service
+      - log-service
+      - storage-service
+
   grafana:
     image: grafana/grafana:10.0.0
     container_name: lakehouse-grafana
@@ -137,10 +165,14 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_SECURITY_ADMIN_USER: admin
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/lakehouse-admin-ops.json
     volumes:
       - grafanadata:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - loki
+      - prometheus
 
   # =============================================
   # Application Services
@@ -296,6 +328,8 @@ volumes:
   lokidata:
     driver: local
   grafanadata:
+    driver: local
+  prometheusdata:
     driver: local
 
 # =============================================
