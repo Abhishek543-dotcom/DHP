@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="API for managing Spark jobs in the Lakehouse Platform",
+    description="API for managing Spark jobs in DataHarbour Project (DHP)",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
