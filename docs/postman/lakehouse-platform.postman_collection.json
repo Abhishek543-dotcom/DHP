@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "6f1e7856-7ca6-457f-9515-56621abf1df4",
-    "name": "Lakehouse Platform API (Local)",
-    "description": "Postman collection for all local Lakehouse Platform service APIs (job, metadata, log, storage).",
+    "name": "DataHarbour Project (DHP) API (Local)",
+    "description": "Postman collection for all local DataHarbour Project (DHP) service APIs (job, metadata, log, storage).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Lakehouse Platform API
+  title: DataHarbour Project (DHP) API
   description: |
     End-to-end managed lakehouse framework with API-driven Spark job execution,
     metadata management, and full observability.

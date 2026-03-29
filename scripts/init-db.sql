@@ -1,4 +1,4 @@
--- Lakehouse Platform - Database Initialization
+-- DataHarbour Project (DHP) - Database Initialization
 -- PostgreSQL 16
 
 -- ============================================

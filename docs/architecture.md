@@ -1,4 +1,4 @@
-# Lakehouse Platform Architecture
+# DataHarbour Project (DHP) Architecture
 
 ## 1. Architecture Goals
 
