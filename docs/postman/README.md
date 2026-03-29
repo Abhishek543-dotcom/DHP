@@ -1,6 +1,6 @@
 # Postman Guide
 
-This folder contains Postman assets for running the full Lakehouse Platform API suite against local development infrastructure.
+This folder contains Postman assets for running the full DataHarbour Project (DHP) API suite against local development infrastructure.
 
 ## Files
 
@@ -9,7 +9,7 @@ This folder contains Postman assets for running the full Lakehouse Platform API 
 
 ## What the Collection Covers
 
-Collection name: `Lakehouse Platform API (Local)`
+Collection name: `DataHarbour Project (DHP) API (Local)`
 
 Folders:
 
@@ -23,7 +23,7 @@ Folders:
 
 1. Open Postman.
 2. Import both files from this folder.
-3. Select environment `Lakehouse Platform Local`.
+3. Select environment `DataHarbour Project (DHP) Local`.
 
 ## Environment Variables
 
@@ -54,7 +54,7 @@ Run folders in this sequence for best results:
 
 Use Collection Runner with:
 
-- Environment: `Lakehouse Platform Local`
+- Environment: `DataHarbour Project (DHP) Local`
 - Save responses enabled
 - Stop run on first error disabled (for broad validation)
 

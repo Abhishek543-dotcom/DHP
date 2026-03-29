@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lakehouse Platform - Project Blackbook</title>
+    <title>DataHarbour Project (DHP) - Project Blackbook</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
       import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
@@ -46,13 +46,13 @@
     <main class="flex-1 p-8 md:p-12 bg-white max-w-5xl mx-auto shadow-sm my-6 rounded-xl">
 
         <header class="mb-12 border-b pb-8">
-            <h1 class="text-4xl md:text-5xl font-extrabold text-blue-900 mb-4">Lakehouse Platform Comprehensive Blackbook</h1>
+            <h1 class="text-4xl md:text-5xl font-extrabold text-blue-900 mb-4">DataHarbour Project (DHP) Comprehensive Blackbook</h1>
             <p class="text-xl text-gray-500">In-depth technical, architectural, and business documentation.</p>
         </header>
 
         <section id="executive-summary" class="content-section">
             <h2 class="text-3xl">1. Executive Summary</h2>
-            <p>The Lakehouse Platform is an enterprise-grade, API-first data platform specifically engineered to run, orchestrate, and manage Apache Spark jobs with stringent operational controls. It is designed to bridge the gap between complex big data engineering and modern microservices-based software delivery.</p>
+            <p>DataHarbour Project (DHP) is an enterprise-grade, API-first data platform specifically engineered to run, orchestrate, and manage Apache Spark jobs with stringent operational controls. It is designed to bridge the gap between complex big data engineering and modern microservices-based software delivery.</p>
             <p>By providing out-of-the-box job submission, a strong metadata catalog for database and table schema evolution, integrated object storage management, and comprehensive observability pipelines, the platform delivers a reliable and scalable foundation for data teams.</p>
             <p>Its architecture employs a decoupled, event-driven pattern using Apache Kafka and Kubernetes, ensuring that the control plane remains responsive and highly available even during intensive data processing workloads in the execution layer.</p>
         </section>
@@ -62,7 +62,7 @@
             <h3 class="text-2xl">The Problem Statement</h3>
             <p>Traditional data engineering teams often struggle with operationalizing Apache Spark workloads. Issues such as unmanaged job submissions, lack of dependency tracking, opaque failure states, and fragmented logging make data operations difficult and costly. Moreover, data governance and schema evolution are frequently treated as afterthoughts, leading to data swamps.</p>
             <h3 class="text-2xl">The Solution</h3>
-            <p>The Lakehouse Platform solves this by bringing standard software engineering practices to big data. It abstracts the complexity of Kubernetes and Spark configurations behind RESTful APIs. Data scientists and engineers can submit jobs via a simple HTTP request without needing to understand the underlying infrastructure.</p>
+            <p>DataHarbour Project (DHP) solves this by bringing standard software engineering practices to big data. It abstracts the complexity of Kubernetes and Spark configurations behind RESTful APIs. Data scientists and engineers can submit jobs via a simple HTTP request without needing to understand the underlying infrastructure.</p>
             <h3 class="text-2xl">Key Business Value Propositions</h3>
             <ul class="list-disc pl-6 space-y-2 mb-4">
                 <li><strong>Developer Velocity:</strong> API-first design allows seamless integration into existing CI/CD pipelines and custom internal portals.</li>
@@ -251,7 +251,7 @@
 
         <section id="observability" class="content-section">
             <h2 class="text-3xl">7. Observability & Monitoring</h2>
-            <p>A production system requires deep visibility. The Lakehouse Platform embeds observability directly into its DNA.</p>
+            <p>A production system requires deep visibility. DataHarbour Project (DHP) embeds observability directly into its DNA.</p>
 
             <h3 class="text-2xl">Metrics Pipeline</h3>
             <p>All FastAPI services expose a <code>/metrics</code> endpoint instrumented via <code>prometheus_fastapi_instrumentator</code>. Prometheus scrapes these endpoints alongside blackbox probes (HTTP/TCP health checks).</p>
@@ -350,7 +350,7 @@ kubectl cluster-info</code></pre>
         </section>
 
         <footer class="mt-12 pt-6 border-t text-center text-gray-400 text-sm">
-            <p>Generated for Lakehouse Platform Documentation &bull; Deployed via GitHub Actions</p>
+            <p>Generated for DataHarbour Project (DHP) Documentation &bull; Deployed via GitHub Actions</p>
         </footer>
 
     </main>
