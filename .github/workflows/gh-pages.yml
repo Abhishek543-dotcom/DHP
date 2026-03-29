@@ -2,7 +2,7 @@ name: Upload artifact
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: ["dev"]
   workflow_dispatch:
 
 permissions:
