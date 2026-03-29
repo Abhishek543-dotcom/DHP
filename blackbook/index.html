@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lakehouse Platform - Project Blackbook</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        h1, h2, h3, h4 { color: #1e3a8a; margin-top: 1.5rem; margin-bottom: 0.75rem; font-weight: bold; }
+        p { margin-bottom: 1rem; line-height: 1.7; color: #374151; }
+        .sidebar { height: 100vh; position: sticky; top: 0; overflow-y: auto; }
+        .content-section { margin-bottom: 4rem; padding-bottom: 2rem; border-bottom: 1px solid #e5e7eb; }
+        code { background-color: #f3f4f6; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.875em; color: #ef4444; }
+        pre { background-color: #1f2937; color: #f8fafc; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 1rem; }
+        pre code { background-color: transparent; color: inherit; padding: 0; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+        th, td { border: 1px solid #e5e7eb; padding: 0.75rem; text-align: left; }
+        th { background-color: #f9fafb; font-weight: 600; }
+    </style>
+</head>
+<body class="bg-gray-50 flex flex-col md:flex-row">
+
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar w-full md:w-64 bg-white shadow-lg p-6 flex-shrink-0">
+        <h2 class="text-xl font-bold mb-6 text-blue-900">Lakehouse Blackbook</h2>
+        <ul class="space-y-3 text-sm text-gray-600">
+            <li><a href="#executive-summary" class="hover:text-blue-600 font-medium">1. Executive Summary</a></li>
+            <li><a href="#business-details" class="hover:text-blue-600 font-medium">2. Business Details</a></li>
+            <li><a href="#architecture-overview" class="hover:text-blue-600 font-medium">3. Architecture Overview</a></li>
+            <li><a href="#core-components" class="hover:text-blue-600 font-medium">4. Core Components</a></li>
+            <li><a href="#control-plane" class="hover:text-blue-600 font-medium">5. Control Plane & Orchestration</a></li>
+            <li><a href="#data-plane" class="hover:text-blue-600 font-medium">6. Data Plane & Metadata</a></li>
+            <li><a href="#observability" class="hover:text-blue-600 font-medium">7. Observability & Monitoring</a></li>
+            <li><a href="#security-model" class="hover:text-blue-600 font-medium">8. Security Model</a></li>
+            <li><a href="#operations-runbook" class="hover:text-blue-600 font-medium">9. Operations & Runbook</a></li>
+            <li><a href="#api-reference" class="hover:text-blue-600 font-medium">10. API Reference</a></li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8 md:p-12 bg-white max-w-5xl mx-auto shadow-sm my-6 rounded-xl">
+
+        <header class="mb-12 border-b pb-8">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-blue-900 mb-4">Lakehouse Platform Comprehensive Blackbook</h1>
+            <p class="text-xl text-gray-500">In-depth technical, architectural, and business documentation.</p>
+        </header>
+
+        <section id="executive-summary" class="content-section">
+            <h2 class="text-3xl">1. Executive Summary</h2>
+            <p>The Lakehouse Platform is an enterprise-grade, API-first data platform specifically engineered to run, orchestrate, and manage Apache Spark jobs with stringent operational controls. It is designed to bridge the gap between complex big data engineering and modern microservices-based software delivery.</p>
+            <p>By providing out-of-the-box job submission, a strong metadata catalog for database and table schema evolution, integrated object storage management, and comprehensive observability pipelines, the platform delivers a reliable and scalable foundation for data teams.</p>
+            <p>Its architecture employs a decoupled, event-driven pattern using Apache Kafka and Kubernetes, ensuring that the control plane remains responsive and highly available even during intensive data processing workloads in the execution layer.</p>
+        </section>
+
+        <section id="business-details" class="content-section">
+            <h2 class="text-3xl">2. Business Details & Motivation</h2>
+            <h3 class="text-2xl">The Problem Statement</h3>
+            <p>Traditional data engineering teams often struggle with operationalizing Apache Spark workloads. Issues such as unmanaged job submissions, lack of dependency tracking, opaque failure states, and fragmented logging make data operations difficult and costly. Moreover, data governance and schema evolution are frequently treated as afterthoughts, leading to data swamps.</p>
+            <h3 class="text-2xl">The Solution</h3>
+            <p>The Lakehouse Platform solves this by bringing standard software engineering practices to big data. It abstracts the complexity of Kubernetes and Spark configurations behind RESTful APIs. Data scientists and engineers can submit jobs via a simple HTTP request without needing to understand the underlying infrastructure.</p>
+            <h3 class="text-2xl">Key Business Value Propositions</h3>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li><strong>Developer Velocity:</strong> API-first design allows seamless integration into existing CI/CD pipelines and custom internal portals.</li>
+                <li><strong>Operational Resilience:</strong> Built-in retry mechanisms, dead-letter patterns, and terminal state tracking prevent jobs from failing silently.</li>
+                <li><strong>Cost Efficiency:</strong> Isolated Spark runtimes on Kubernetes scale up on demand and terminate upon completion, minimizing idle compute costs.</li>
+                <li><strong>Data Governance:</strong> The centralized Metadata Service enforces schema controls and versioning, critical for regulatory compliance and data quality.</li>
+                <li><strong>Extensibility:</strong> Microservices architecture allows independent scaling of job orchestration, metadata management, and storage.</li>
+            </ul>
+        </section>
+
+        <section id="architecture-overview" class="content-section">
+            <h2 class="text-3xl">3. Architecture Overview</h2>
+            <p>The platform follows a layered, decoupled architectural style. It is broadly divided into the <strong>Control Plane</strong> (FastAPI Services), the <strong>Orchestration Layer</strong> (Kafka + K8s Manager), and the <strong>Execution Layer</strong> (Spark containers).</p>
+
+            <h3 class="text-2xl mt-6 mb-4">Logical Architecture Diagram</h3>
+            <div class="mermaid bg-gray-50 p-4 rounded-lg flex justify-center border">
+                graph TD
+                subgraph Clients
+                    UI[Clients / Postman / SDK / UI]
+                end
+
+                subgraph "Control Plane (FastAPI Services)"
+                    JS[Job Service - Port 8001]
+                    MS[Metadata Service - Port 8002]
+                    LS[Log Service - Port 8003]
+                    SS[Storage Service - Port 8004]
+                end
+
+                subgraph "Orchestration Layer"
+                    Kafka[Apache Kafka - Event Bus]
+                    Orch[Orchestrator Consumer]
+                    K8sAPI[Kubernetes API]
+                end
+
+                subgraph "Execution Layer"
+                    Spark[Spark Runtime Job Container]
+                    FB[Fluent Bit Sidecar]
+                end
+
+                subgraph "Data Plane & Persistence"
+                    PG[(PostgreSQL DB)]
+                    MinIO[(MinIO / S3 Storage)]
+                    Loki[(Loki Log Storage)]
+                end
+
+                UI -->|HTTP POST /jobs| JS
+                UI -->|HTTP GET /tables| MS
+                UI -->|HTTP GET /logs| LS
+                UI -->|HTTP GET /objects| SS
+
+                JS <-->|Read/Write State| PG
+                MS <-->|Read/Write Schema| PG
+
+                JS -->|Publish Event| Kafka
+                Kafka -->|Consume Event| Orch
+                Orch -->|Create K8s Job| K8sAPI
+                K8sAPI --> Spark
+
+                Spark -->|Internal Callback: Status| JS
+                Spark -->|Read/Write Data| MinIO
+                Spark -->|Write Logs| FB
+                FB -->|Forward Logs| Loki
+                LS -->|Query Logs| Loki
+            </div>
+
+            <h3 class="text-2xl mt-6">Design Goals</h3>
+            <ol class="list-decimal pl-6 space-y-2 mb-4 text-gray-700">
+                <li><strong>API-first job operations:</strong> All interactions occur via documented REST APIs.</li>
+                <li><strong>Isolated runtime per job:</strong> Every workload runs in a pristine environment.</li>
+                <li><strong>Durable asynchronous orchestration:</strong> Kafka ensures no jobs are lost during API restarts.</li>
+                <li><strong>Clear metadata governance:</strong> Dedicated service for schema and database management.</li>
+                <li><strong>Production-style observability:</strong> Out-of-the-box integration with Prometheus and Grafana.</li>
+            </ol>
+        </section>
+
+        <section id="core-components" class="content-section">
+            <h2 class="text-3xl">4. Core Components Explained</h2>
+            <p>The system is comprised of several distinct microservices, each with a single responsibility.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Technology</th>
+                        <th>Port</th>
+                        <th>Primary Responsibility</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Job Service</strong></td>
+                        <td>Python (FastAPI), PostgreSQL</td>
+                        <td>8001</td>
+                        <td>Job intake, status lifecycle, retries, cancellation, log passthrough. Maintains states: PENDING, QUEUED, RUNNING, SUCCESS, FAILED, DEAD.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Metadata Service</strong></td>
+                        <td>Python (FastAPI), PostgreSQL</td>
+                        <td>8002</td>
+                        <td>Database and table CRUD operations, schema history tracking, snapshot lookups. Supports Apache Iceberg catalog representations.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Log Service</strong></td>
+                        <td>Python (FastAPI), Loki</td>
+                        <td>8003</td>
+                        <td>Queries and streams job logs from Loki. Supports Server-Sent Events (SSE) for real-time log streaming.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Storage Service</strong></td>
+                        <td>Python (FastAPI), MinIO SDK</td>
+                        <td>8004</td>
+                        <td>Manages S3 buckets, object listing, and presigned URL generation for secure data access.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Orchestrator</strong></td>
+                        <td>Python, Kafka Consumer</td>
+                        <td>N/A</td>
+                        <td>Listens to Kafka. Communicates with Kubernetes API to spawn isolated Spark pods.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Observability Stack</strong></td>
+                        <td>Prometheus, Grafana, Loki</td>
+                        <td>3000, 9090, 3100</td>
+                        <td>Metrics scraping, probing, log storage, and centralized dashboards.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="control-plane" class="content-section">
+            <h2 class="text-3xl">5. Control Plane & Orchestration Deep Dive</h2>
+
+            <h3 class="text-2xl">Job Submission Lifecycle</h3>
+            <p>The orchestration workflow is robust against failures. When a client submits a job:</p>
+            <ol class="list-decimal pl-6 space-y-2 mb-4">
+                <li>The Job Service validates the request and writes a <code>PENDING</code> record to PostgreSQL.</li>
+                <li>It reliably publishes an event to the Kafka topic <code>spark-job-submissions</code>. Upon success, the job is marked <code>QUEUED</code>.</li>
+                <li>The Orchestrator consumes this message. It updates the state to <code>PROVISIONING</code> via an internal API.</li>
+                <li>A Kubernetes Job is generated dynamically, injecting required S3 credentials, Spark configurations, and a unique <code>X-Internal-Token</code>.</li>
+                <li>When the Spark container boots, it immediately makes a callback to the Job Service declaring itself <code>RUNNING</code>.</li>
+                <li>Upon completion, the Spark entrypoint script catches the exit code and makes a final callback reporting <code>SUCCESS</code> or <code>FAILED</code>.</li>
+            </ol>
+
+            <h3 class="text-2xl">Retry and Fault Tolerance Model</h3>
+            <p>Rather than relying purely on Kubernetes' internal backoff mechanisms (which lack business context), the retry logic is handled at the application layer.</p>
+            <p>If a job fails and <code>retry_count &lt; max_retries</code>, the Job Service automatically increments the counter and requeues the job on Kafka. If the retries are exhausted, the job is explicitly marked <code>DEAD</code>.</p>
+
+            <div class="mermaid bg-gray-50 p-4 rounded-lg flex justify-center border">
+                stateDiagram-v2
+                    [*] --> PENDING: API Request
+                    PENDING --> QUEUED: Kafka Publish Success
+                    PENDING --> FAILED: Kafka Publish Fail
+                    QUEUED --> PROVISIONING: Orchestrator Pickup
+                    PROVISIONING --> RUNNING: K8s Pod Started (Callback)
+                    PROVISIONING --> FAILED: K8s Sched Error
+                    RUNNING --> SUCCESS: Spark Exit 0 (Callback)
+                    RUNNING --> FAILED: Spark Exit >0 (Callback)
+                    FAILED --> QUEUED: Retry (count < max)
+                    FAILED --> DEAD: Retry Exhausted
+                    QUEUED --> CANCELLED: User Abort
+                    RUNNING --> CANCELLED: User Abort
+            </div>
+        </section>
+
+        <section id="data-plane" class="content-section">
+            <h2 class="text-3xl">6. Data Plane & Metadata Management</h2>
+
+            <h3 class="text-2xl">Metadata Catalog Architecture</h3>
+            <p>The Metadata Service acts as the brain for data governance. It abstracts the underlying storage mechanisms (like Iceberg or Delta) by persisting logical definitions in PostgreSQL.</p>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li><strong>Namespaces:</strong> Logical grouping of tables (<code>catalog_databases</code>).</li>
+                <li><strong>Tables:</strong> Defines the table formats (<code>catalog_tables</code>), e.g., ICEBERG.</li>
+                <li><strong>Schema Evolution:</strong> Stored in <code>schema_history</code>. Every change (add column, drop column, change type) creates an immutable history record.</li>
+            </ul>
+
+            <h3 class="text-2xl">Storage Interoperability</h3>
+            <p>In local development, MinIO is used as an S3-compatible backend. A bootstrap script provisions essential buckets:</p>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li><code>lakehouse-warehouse</code>: Stores optimized analytical datasets.</li>
+                <li><code>lakehouse-raw</code>: Landing zone for incoming messy data.</li>
+                <li><code>lakehouse-scripts</code>: Artifact repository for PySpark entrypoint scripts.</li>
+                <li><code>lakehouse-logs</code>: Optional cold storage for logs.</li>
+            </ul>
+            <p>Spark jobs interact with this layer exclusively via the <code>s3a://</code> protocol, ensuring zero code changes when migrating from MinIO to AWS S3.</p>
+        </section>
+
+        <section id="observability" class="content-section">
+            <h2 class="text-3xl">7. Observability & Monitoring</h2>
+            <p>A production system requires deep visibility. The Lakehouse Platform embeds observability directly into its DNA.</p>
+
+            <h3 class="text-2xl">Metrics Pipeline</h3>
+            <p>All FastAPI services expose a <code>/metrics</code> endpoint instrumented via <code>prometheus_fastapi_instrumentator</code>. Prometheus scrapes these endpoints alongside blackbox probes (HTTP/TCP health checks).</p>
+            <p>Key metrics collected:</p>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li>API Request Rate and P95 Latency</li>
+                <li>Service Resource Consumption (CPU, Memory, File Descriptors)</li>
+                <li>Kafka Consumer Lag</li>
+                <li>Job State Transitions</li>
+            </ul>
+
+            <h3 class="text-2xl">Logging Pipeline</h3>
+            <p>Logs are critical for debugging distributed Spark tasks. When a Kubernetes Spark pod runs:</p>
+            <ol class="list-decimal pl-6 space-y-2 mb-4">
+                <li>Spark writes its stdout/stderr to <code>/var/log/spark/&lt;job_id&gt;.log</code>.</li>
+                <li>A Fluent Bit sidecar container (or DaemonSet) tails these files.</li>
+                <li>Fluent Bit enriches the logs with labels (job_id, container_id) and forwards them to Loki.</li>
+                <li>Users fetch logs cleanly via the Log Service API (<code>/api/v1/logs/{job_id}</code>).</li>
+            </ol>
+
+            <h3 class="text-2xl">Grafana Dashboards</h3>
+            <p>The platform provisions an extensive "Lakehouse Admin Ops" dashboard out-of-the-box (UID: <code>lakehouse-admin-ops</code>). It aggregates API throughput, latency histograms, error rates, and a live stream of critical errors from Loki.</p>
+        </section>
+
+        <section id="security-model" class="content-section">
+            <h2 class="text-3xl">8. Security Model</h2>
+            <p>Security is implemented at both the edge and the internal boundaries.</p>
+            <h3 class="text-2xl">Authentication Mechanisms</h3>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li><strong>External Access:</strong> All business endpoints require an <code>X-API-Key</code>. This protects job submissions, data definitions, and log reads.</li>
+                <li><strong>Internal Access:</strong> Microservice-to-microservice communication (like the Spark callback to Job Service) requires an <code>X-Internal-Token</code>. This prevents external actors from spoofing job statuses.</li>
+                <li><strong>Timing Attack Prevention:</strong> Token validation relies on <code>hmac.compare_digest</code> for constant-time comparison.</li>
+            </ul>
+            <h3 class="text-2xl">Future Hardening</h3>
+            <p>The architectural roadmap includes migrating to OIDC-backed Identity Providers, integrating external Secret Managers (like HashiCorp Vault), and enforcing strict mTLS between services using a service mesh (e.g., Istio).</p>
+        </section>
+
+        <section id="operations-runbook" class="content-section">
+            <h2 class="text-3xl">9. Operations & Runbook</h2>
+            <p>For site reliability engineers, here are standard operating procedures.</p>
+
+            <h3 class="text-2xl">Startup Procedure</h3>
+            <pre><code>cp .env.example .env
+make build-spark
+make up</code></pre>
+
+            <h3 class="text-2xl">Health Verification</h3>
+            <p>Execute these commands to ensure platform readiness:</p>
+            <pre><code>curl -s http://localhost:8001/health/ready
+curl -s http://localhost:3100/ready
+curl -s http://localhost:9090/-/healthy
+kubectl cluster-info</code></pre>
+
+            <h3 class="text-2xl">Common Troubleshooting</h3>
+            <p><strong>Scenario: Jobs stuck in PENDING or QUEUED</strong></p>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li>Check Kafka health: <code>docker logs lakehouse-kafka --tail 100</code></li>
+                <li>Check Orchestrator: <code>docker logs lakehouse-orchestrator --tail 200</code></li>
+                <li>Verify Kafka topic auto-creation is enabled in the cluster.</li>
+            </ul>
+
+            <p><strong>Scenario: Orchestrator Cannot Reach Kubernetes</strong></p>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li>Ensure <code>~/.kube/config</code> is correctly mounted.</li>
+                <li>Ensure <code>K8S_HOST_ALIAS=host.docker.internal</code> and <code>K8S_SKIP_TLS_VERIFY=true</code> are configured for local Docker-to-host connectivity.</li>
+            </ul>
+
+            <p><strong>Scenario: Missing Job Logs</strong></p>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li>Verify Loki is operational: <code>curl -s http://localhost:3100/ready</code></li>
+                <li>Ensure the Fluent Bit sidecar is successfully parsing and shipping logs from the Spark pod.</li>
+            </ul>
+        </section>
+
+        <section id="api-reference" class="content-section border-none">
+            <h2 class="text-3xl">10. API Reference Highlights</h2>
+            <p>Full OpenAPI specifications are available at <code>/docs</code> for each service port. Below are critical endpoints.</p>
+
+            <h3 class="text-2xl mt-4">Job Service (Port 8001)</h3>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li><code>POST /api/v1/jobs/</code>: Submit a new job. Requires JSON payload with entrypoint, Spark config, and job_name.</li>
+                <li><code>GET /api/v1/jobs/{job_id}</code>: Poll for status.</li>
+                <li><code>PUT /api/v1/jobs/{job_id}/status</code>: (Internal) Update job status. Requires Internal-Token.</li>
+            </ul>
+
+            <h3 class="text-2xl mt-4">Metadata Service (Port 8002)</h3>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li><code>POST /api/v1/databases/{db_name}/tables/</code>: Create a new logical table definition. Supports nested JSON schema declarations.</li>
+                <li><code>GET /api/v1/databases/{db_name}/tables/{table_name}/snapshots</code>: Retrieve history of schema modifications.</li>
+            </ul>
+
+            <h3 class="text-2xl mt-4">Storage Service (Port 8004)</h3>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li><code>POST /api/v1/storage/buckets/{bucket_name}/presigned-url</code>: Generate secure, time-bound URLs for uploading large Spark scripts or data files without exposing S3 credentials.</li>
+            </ul>
+        </section>
+
+        <footer class="mt-12 pt-6 border-t text-center text-gray-400 text-sm">
+            <p>Generated for Lakehouse Platform Documentation &bull; Deployed via GitHub Actions</p>
+        </footer>
+
+    </main>
+</body>
+</html>
