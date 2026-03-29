@@ -1,4 +1,4 @@
-# Lakehouse Platform Runbook
+# DataHarbour Project (DHP) Runbook
 
 This runbook is for operators and developers running the platform in local dev or validating production-like behavior.
 

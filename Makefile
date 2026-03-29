@@ -10,7 +10,7 @@ help: ## Show this help
 # =============================================
 
 dev: up ## Start full development environment
-	@echo "Lakehouse Platform is running!"
+	@echo "DataHarbour Project (DHP) is running!"
 	@echo "  Job Service:      http://localhost:8001/docs"
 	@echo "  Metadata Service: http://localhost:8002/docs"
 	@echo "  Log Service:      http://localhost:8003/docs"
