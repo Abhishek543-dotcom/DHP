@@ -1,6 +1,6 @@
-# Lakehouse Platform
+# DataHarbour Project (DHP)
 
-Lakehouse Platform is an API-first data platform for running Spark jobs with strong operational controls:
+DataHarbour Project (DHP) is an API-first data platform for running Spark jobs with strong operational controls:
 
 - Job submission, cancellation, status tracking, and retries
 - Metadata catalog for databases and tables (schema evolution included)
@@ -141,7 +141,7 @@ Grafana ships with a provisioned admin dashboard:
 
 - URL: `http://localhost:3000/d/lakehouse-admin-ops/lakehouse-platform-admin-operations-overview`
 - UID: `lakehouse-admin-ops`
-- Folder: `Lakehouse Admin`
+- Folder: `DataHarbour Admin`
 
 The dashboard includes:
 

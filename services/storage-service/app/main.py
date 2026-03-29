@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="API for managing object storage in the Lakehouse Platform",
+    description="API for managing object storage in DataHarbour Project (DHP)",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",

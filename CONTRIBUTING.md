@@ -1,4 +1,4 @@
-# Contributing to Lakehouse Platform
+# Contributing to DataHarbour Project (DHP)
 
 Thanks for contributing. This guide keeps contributions consistent, reviewable, and production-safe.
 
