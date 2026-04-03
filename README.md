@@ -24,6 +24,7 @@ This repository is optimized for local development while preserving production-l
 | Loki | 3100 | Log storage and query backend |
 | MinIO API | 9000 | S3-compatible object storage endpoint |
 | MinIO Console | 9001 | MinIO admin UI |
+| Streamlit UI | 8501 | Interactive control-plane UI for platform operations |
 | Kafka | 9092/29092 | Job queue and async event backbone |
 | PostgreSQL | 5432 | Job and catalog metadata persistence |
 | Redis | 6379 | Service cache / future coordination |
@@ -68,6 +69,7 @@ After startup:
 - Grafana: `http://localhost:3000` (`admin` / `admin`)
 - Prometheus: `http://localhost:9090`
 - MinIO Console: `http://localhost:9001`
+- Streamlit UI: `http://localhost:8501`
 
 ## Authentication Model
 
@@ -151,6 +153,20 @@ The dashboard includes:
 - CPU, memory, and open file descriptors per service
 - Job API activity and log volume panels
 - Recent error logs from Loki
+
+
+## Frontend UI (Streamlit)
+
+A Streamlit UI is available at `http://localhost:8501` (service: `ui`).
+
+Capabilities:
+- Pipeline/job submission, listing, lookup, cancellation, and logs
+- SQL execution via Spark SQL job submission
+- Metadata database and table creation flows
+- Storage bucket and object browsing operations
+- Cluster namespace creation/listing via Job Service cluster endpoints
+
+The legacy static HTML prototypes remain in `Frontend/` for design reference.
 
 ## Postman Assets
 
