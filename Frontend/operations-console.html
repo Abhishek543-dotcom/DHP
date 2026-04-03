@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DHP Operations Console</title>
+  <style>
+    body{font-family:Inter,Arial,sans-serif;margin:0;background:#f6f8fb;color:#1d2735}
+    .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+    .card{background:#fff;border:1px solid #dbe3ef;border-radius:10px;padding:14px;margin:12px 0}
+    label{display:block;font-size:12px;margin-top:8px;font-weight:700}
+    input,select,textarea{width:100%;padding:8px;border:1px solid #c9d6e8;border-radius:8px}
+    button{margin-top:10px;background:#1f4b8f;color:#fff;border:none;border-radius:8px;padding:9px 12px;cursor:pointer}
+    pre{background:#111827;color:#d1f2d8;padding:10px;border-radius:8px;white-space:pre-wrap;max-height:280px;overflow:auto}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width: 900px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>DHP Operations Console</h1>
+  <p>Runs against Job, Metadata, and Storage APIs. Supports namespace-based cluster environment creation.</p>
+
+  <div class="card">
+    <h3>Connection</h3>
+    <div class="grid">
+      <div><label>API Key</label><input id="apiKey" value="dev-api-key-change-me" /></div>
+      <div><label>Internal Token (not needed for this page)</label><input id="internalToken" value="dev-internal-token-change-me" /></div>
+      <div><label>Job Service Base URL</label><input id="jobBase" value="http://localhost:8001" /></div>
+      <div><label>Metadata Service Base URL</label><input id="metaBase" value="http://localhost:8002" /></div>
+      <div><label>Storage Service Base URL</label><input id="storageBase" value="http://localhost:8004" /></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Create/Run Pipeline (Job)</h3>
+      <label>Job Name</label><input id="jobName" value="pipeline-orders-daily"/>
+      <label>Job Type</label>
+      <select id="jobType"><option>spark_etl</option><option>spark_sql</option><option>spark_ml</option><option>spark_streaming</option></select>
+      <label>Entrypoint</label><input id="entrypoint" value="s3://lakehouse-scripts/etl/sales_transform.py"/>
+      <label>Submitted By</label><input id="submittedBy" value="frontend-user"/>
+      <button onclick="submitJob()">Submit Job</button>
+      <button onclick="listJobs()">List Jobs</button>
+    </div>
+
+    <div class="card">
+      <h3>Run SQL Query (as Spark SQL job)</h3>
+      <label>SQL Query</label>
+      <textarea id="sql" rows="4">SELECT * FROM demo.orders LIMIT 10;</textarea>
+      <button onclick="runSqlJob()">Run SQL Job</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Metadata: Database/Table</h3>
+      <label>Database Name</label><input id="dbName" value="demo"/>
+      <button onclick="createDb()">Create Database</button>
+      <button onclick="listDb()">List Databases</button>
+      <label>Table Name</label><input id="tableName" value="orders"/>
+      <label>Schema (JSON array)</label>
+      <textarea id="schemaFields" rows="3">[{"name":"id","type":"int","nullable":false},{"name":"amount","type":"double","nullable":true}]</textarea>
+      <button onclick="createTable()">Create Table</button>
+    </div>
+
+    <div class="card">
+      <h3>Storage: Buckets</h3>
+      <label>Bucket Name</label><input id="bucketName" value="demo-bucket"/>
+      <button onclick="createBucket()">Create Bucket</button>
+      <button onclick="listBuckets()">List Buckets</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Cluster Environment (Namespace)</h3>
+    <p>Creates/Lists Kubernetes namespaces via Job Service cluster API.</p>
+    <label>Namespace</label><input id="namespace" value="dhp-dev"/>
+    <button onclick="createNamespace()">Create Namespace</button>
+    <button onclick="listNamespaces()">List Namespaces</button>
+  </div>
+
+  <div class="card">
+    <h3>API Output</h3>
+    <pre id="out">Ready.</pre>
+  </div>
+</div>
+
+<script>
+const out = (v) => document.getElementById('out').textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+const apiKey = () => document.getElementById('apiKey').value;
+const headers = () => ({'Content-Type':'application/json','X-API-Key': apiKey()});
+const base = (id) => document.getElementById(id).value.replace(/\/$/, '');
+async function call(url, opts={}) { const r = await fetch(url, opts); const t = await r.text(); let body=t; try{body=JSON.parse(t)}catch{} if(!r.ok) throw new Error(`${r.status} ${JSON.stringify(body)}`); return body; }
+
+async function submitJob(){
+  try {
+    const payload = {job_name:jobName.value,job_type:jobType.value,entrypoint:entrypoint.value,submitted_by:submittedBy.value,arguments:[],spark_config:{}};
+    out(await call(`${base('jobBase')}/api/v1/jobs/`, {method:'POST',headers:headers(),body:JSON.stringify(payload)}));
+  } catch(e){ out(e.message); }
+}
+async function listJobs(){ try{ out(await call(`${base('jobBase')}/api/v1/jobs/`, {headers:headers()})); }catch(e){out(e.message);} }
+async function runSqlJob(){
+  try {
+    const payload = {job_name:`sql-${Date.now()}`,job_type:'spark_sql',entrypoint:'inline-sql',submitted_by:submittedBy.value,arguments:[sql.value],spark_config:{"spark.sql.query":sql.value}};
+    out(await call(`${base('jobBase')}/api/v1/jobs/`, {method:'POST',headers:headers(),body:JSON.stringify(payload)}));
+  } catch(e){ out(e.message); }
+}
+async function createDb(){ try{ out(await call(`${base('metaBase')}/api/v1/databases/`, {method:'POST',headers:headers(),body:JSON.stringify({db_name:dbName.value,description:'created-from-ui'})})); }catch(e){out(e.message);} }
+async function listDb(){ try{ out(await call(`${base('metaBase')}/api/v1/databases/`, {headers:headers()})); }catch(e){out(e.message);} }
+async function createTable(){
+  try{ out(await call(`${base('metaBase')}/api/v1/databases/${encodeURIComponent(dbName.value)}/tables/`, {method:'POST',headers:headers(),body:JSON.stringify({table_name:tableName.value,schema_fields:JSON.parse(schemaFields.value)})})); }catch(e){out(e.message);} }
+async function createBucket(){ try{ out(await call(`${base('storageBase')}/api/v1/storage/buckets`, {method:'POST',headers:headers(),body:JSON.stringify({name:bucketName.value})})); }catch(e){out(e.message);} }
+async function listBuckets(){ try{ out(await call(`${base('storageBase')}/api/v1/storage/buckets`, {headers:headers()})); }catch(e){out(e.message);} }
+async function createNamespace(){ try{ out(await call(`${base('jobBase')}/api/v1/clusters/namespaces`, {method:'POST',headers:headers(),body:JSON.stringify({name:namespace.value})})); }catch(e){out(e.message);} }
+async function listNamespaces(){ try{ out(await call(`${base('jobBase')}/api/v1/clusters/namespaces`, {headers:headers()})); }catch(e){out(e.message);} }
+</script>
+</body>
+</html>

@@ -10,7 +10,7 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for minimal test envs
 
 from app.config import get_settings
 from app.db.session import init_db, close_db
-from app.routers import health, jobs
+from app.routers import health, jobs, clusters
 from app.services.kafka_client import close_kafka_producer
 
 settings = get_settings()
@@ -68,6 +68,7 @@ else:
 # Register routers
 app.include_router(health.router)
 app.include_router(jobs.router)
+app.include_router(clusters.router)
 
 
 @app.get("/")

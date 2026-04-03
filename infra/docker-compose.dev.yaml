@@ -193,9 +193,11 @@ services:
       CALLBACK_URL: http://job-service:8000
       API_KEY: ${API_KEY:-dev-api-key-change-me}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev-internal-token-change-me}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004,http://localhost:8080}
       AUTO_CREATE_TABLES: "true"
       DEBUG: "false"
+    volumes:
+      - ${HOME}/.kube:/root/.kube:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -223,7 +225,7 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-dev-secret-key-change-me}
       S3_WAREHOUSE_BUCKET: lakehouse-warehouse
       API_KEY: ${API_KEY:-dev-api-key-change-me}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004,http://localhost:8080}
       AUTO_CREATE_TABLES: "true"
       DEBUG: "false"
     depends_on:
@@ -247,7 +249,7 @@ services:
     environment:
       LOKI_URL: http://loki:3100
       API_KEY: ${API_KEY:-dev-api-key-change-me}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004,http://localhost:8080}
       DEBUG: "false"
     depends_on:
       loki:
@@ -271,7 +273,7 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-dev-secret-key-change-me}
       S3_REGION: us-east-1
       API_KEY: ${API_KEY:-dev-api-key-change-me}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8000,http://localhost:8001,http://localhost:8002,http://localhost:8003,http://localhost:8004,http://localhost:8080}
       DEBUG: "false"
     depends_on:
       minio:
@@ -315,6 +317,22 @@ services:
       kafka:
         condition: service_healthy
       job-service:
+        condition: service_healthy
+
+
+  frontend:
+    image: nginx:1.27-alpine
+    container_name: lakehouse-frontend
+    ports:
+      - "8080:80"
+    volumes:
+      - ../Frontend:/usr/share/nginx/html:ro
+    depends_on:
+      job-service:
+        condition: service_healthy
+      metadata-service:
+        condition: service_healthy
+      storage-service:
         condition: service_healthy
 
 # =============================================
