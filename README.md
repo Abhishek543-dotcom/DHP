@@ -24,7 +24,7 @@ This repository is optimized for local development while preserving production-l
 | Loki | 3100 | Log storage and query backend |
 | MinIO API | 9000 | S3-compatible object storage endpoint |
 | MinIO Console | 9001 | MinIO admin UI |
-| Streamlit UI | 8501 | Interactive control-plane UI for platform operations |
+| Frontend UI | 8080 | API-connected operations console and UI pages |
 | Kafka | 9092/29092 | Job queue and async event backbone |
 | PostgreSQL | 5432 | Job and catalog metadata persistence |
 | Redis | 6379 | Service cache / future coordination |
@@ -69,7 +69,7 @@ After startup:
 - Grafana: `http://localhost:3000` (`admin` / `admin`)
 - Prometheus: `http://localhost:9090`
 - MinIO Console: `http://localhost:9001`
-- Streamlit UI: `http://localhost:8501`
+- Frontend console: `http://localhost:8080`
 
 ## Authentication Model
 
@@ -155,18 +155,24 @@ The dashboard includes:
 - Recent error logs from Loki
 
 
-## Frontend UI (Streamlit)
+## Frontend UI
 
-A Streamlit UI is available at `http://localhost:8501` (service: `ui`).
+The repository now serves the `Frontend/` folder via Nginx at `http://localhost:8080`.
 
-Capabilities:
-- Pipeline/job submission, listing, lookup, cancellation, and logs
-- SQL execution via Spark SQL job submission
-- Metadata database and table creation flows
-- Storage bucket and object browsing operations
-- Cluster namespace creation/listing via Job Service cluster endpoints
+Key pages:
+- `http://localhost:8080/operations-console.html` (API-connected workflows)
+- `http://localhost:8080/catalog.html`
+- `http://localhost:8080/sql-workspace.html`
+- `http://localhost:8080/workflows-pipelines.html`
+- `http://localhost:8080/platform-monitoring.html`
+- `http://localhost:8080/dashboard.html`
 
-The legacy static HTML prototypes remain in `Frontend/` for design reference.
+The operations console supports:
+- pipeline/job creation and execution
+- SQL execution via Spark SQL jobs
+- metadata database/table operations
+- bucket operations
+- cluster environment namespace creation and listing
 
 ## Postman Assets
 
