@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-secondary": "#ffffff",
+            "surface-container-low": "#f3f4f6",
+            "inverse-on-surface": "#f0f1f3",
+            "primary-container": "#3e5f74",
+            "tertiary": "#4a3a72",
+            "surface-bright": "#f8f9fb",
+            "surface-dim": "#d9dadc",
+            "background": "#f8f9fb",
+            "on-secondary-fixed-variant": "#004e5d",
+            "surface-container-lowest": "#ffffff",
+            "on-tertiary-container": "#dbccff",
+            "on-tertiary-fixed": "#201047",
+            "on-error-container": "#93000a",
+            "tertiary-fixed-dim": "#cfbdfe",
+            "tertiary-fixed": "#e9ddff",
+            "on-secondary-fixed": "#001f26",
+            "primary": "#25475c",
+            "error-container": "#ffdad6",
+            "inverse-primary": "#a9cbe4",
+            "secondary-fixed": "#adecff",
+            "on-primary-fixed-variant": "#294a5f",
+            "surface-container": "#edeef0",
+            "primary-fixed": "#c7e7ff",
+            "on-background": "#191c1e",
+            "on-secondary-container": "#006374",
+            "primary-fixed-dim": "#a9cbe4",
+            "on-primary-fixed": "#001e2e",
+            "secondary": "#00687a",
+            "outline-variant": "#c3c6d6",
+            "surface-container-high": "#e7e8ea",
+            "on-surface-variant": "#434654",
+            "inverse-surface": "#2e3132",
+            "surface-container-highest": "#e1e2e4",
+            "surface-variant": "#e1e2e4",
+            "surface-tint": "#416278",
+            "secondary-fixed-dim": "#5dd6f3",
+            "secondary-container": "#6ae1ff",
+            "on-surface": "#191c1e",
+            "error": "#ba1a1a",
+            "on-error": "#ffffff",
+            "on-primary": "#ffffff",
+            "on-primary-container": "#b5d7f1",
+            "on-tertiary-fixed-variant": "#4d3d75",
+            "outline": "#737685",
+            "surface": "#f8f9fb",
+            "tertiary-container": "#62528b",
+            "on-tertiary": "#ffffff"
+          },
+          fontFamily: {
+            "headline": ["Manrope"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          },
+          borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      font-size: 20px;
+    }
+    .tonal-shift { background-color: #f8f9fb; }
+    .surface-dim-bg { background-color: #d9dadc; }
+    body { font-family: 'Inter', sans-serif; }
+    h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+  </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar (JSON Content & Styles Applied) -->
+<header class="w-full h-16 bg-white dark:bg-slate-900 border-b border-slate-200/50 dark:border-slate-800/50 flex justify-between items-center px-6 sticky top-0 z-40">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold tracking-tighter text-slate-900 dark:text-slate-50 font-headline">Data Cathedral</span>
+<div class="hidden md:flex items-center bg-surface-container-highest px-3 py-1.5 rounded-lg gap-2">
+<span class="material-symbols-outlined text-outline">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm font-body w-64 placeholder:text-outline" placeholder="Search data assets..." type="text"/>
+</div>
+</div>
+<nav class="flex items-center gap-4">
+<button class="px-4 py-2 bg-primary-container text-on-primary-container rounded-lg text-sm font-semibold hover:brightness-110 transition-all font-body">Create New</button>
+<button class="px-4 py-2 text-primary border border-outline-variant/30 rounded-lg text-sm font-semibold hover:bg-surface-container transition-all font-body">Run Query</button>
+<div class="h-6 w-[1px] bg-outline-variant/30 mx-2"></div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary transition-colors">notifications</span>
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary transition-colors">settings</span>
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary transition-colors">help</span>
+<img alt="User Profile" class="w-8 h-8 rounded-full border border-outline-variant/30 ml-2" data-alt="Close-up professional portrait of a modern developer with a neutral background and soft studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAYNieWZ5ZPRHMqiQ6Z1YrIvynQrQes38LvHAXA2cWLDgdOMm4isfZ0XyxxgRsxUG3cPmJqF2QpoltC2by8Khc0VEH4Xi9FAIpaVpzinh27VBuHnsNeq3uJRwmCct02CBtXYYAQyPoHB-5xCryV5hfpMZlJuFCBQIEeXDttEU7oqfvqZJ_tgpCsVJyYwjzEOHAWDMlW0o4APyh2VyE-YrRk97pD15C7kJ549_DTa2RGxpOSnDP4-XRJwORmC9HcfTDZ-kxEU2SuvPo"/>
+</div>
+</nav>
+</header>
+<div class="flex">
+<!-- SideNavBar (JSON Content & Styles Applied) -->
+<aside class="h-[calc(100vh-4rem)] w-64 bg-slate-100 dark:bg-slate-950 flex flex-col py-4 gap-2 sticky top-16 border-r border-slate-200/20">
+<div class="px-6 mb-4 flex items-center gap-3">
+<div class="w-8 h-8 bg-primary rounded flex items-center justify-center text-white font-black text-xs">PR</div>
+<div>
+<p class="font-manrope text-xs uppercase tracking-widest font-bold text-slate-800">Infrastructure</p>
+<p class="text-[10px] text-outline font-body leading-none">Prod-Region-1</p>
+</div>
+</div>
+<div class="flex-grow">
+<a class="flex items-center gap-3 px-6 py-2 text-blue-700 dark:text-blue-400 bg-white/50 dark:bg-white/5 font-bold border-r-2 border-blue-600 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">database</span>
+<span class="font-manrope text-xs uppercase tracking-widest">Catalog</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span class="font-manrope text-xs uppercase tracking-widest">Worksheets</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">account_tree</span>
+<span class="font-manrope text-xs uppercase tracking-widest">Workflows</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-manrope text-xs uppercase tracking-widest">Monitoring</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-manrope text-xs uppercase tracking-widest">Dashboard</span>
+</a>
+</div>
+<div class="px-4 mb-4">
+<button class="w-full py-2 bg-primary text-white rounded text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm">
+<span class="material-symbols-outlined text-sm">add</span>
+          New Asset
+        </button>
+</div>
+<div class="border-t border-outline-variant/10 pt-4">
+<a class="flex items-center gap-3 px-6 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span class="font-manrope text-xs uppercase tracking-widest">Documentation</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-manrope text-xs uppercase tracking-widest">Settings</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas (The Data Cathedral Aesthetic) -->
+<main class="flex-grow flex bg-surface">
+<!-- High Density Hierarchy Rail -->
+<section class="w-72 bg-surface-container-low flex flex-col border-r border-outline-variant/10">
+<div class="p-4 border-b border-outline-variant/10">
+<div class="flex items-center justify-between mb-4">
+<h3 class="font-headline font-bold text-sm">Explorer</h3>
+<span class="material-symbols-outlined text-outline cursor-pointer">filter_list</span>
+</div>
+<div class="flex items-center bg-surface-container-lowest px-2 py-1 rounded border border-outline-variant/10">
+<span class="material-symbols-outlined text-outline text-sm">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-xs w-full" placeholder="Filter objects..." type="text"/>
+</div>
+</div>
+<div class="overflow-y-auto flex-grow p-2 space-y-1">
+<!-- Hierarchy Item: Database -->
+<div>
+<button class="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-surface-container transition-colors rounded text-sm text-on-surface font-medium">
+<span class="material-symbols-outlined text-primary">expand_more</span>
+<span class="material-symbols-outlined text-primary">database</span>
+              analytics_dw
+            </button>
+<div class="ml-6 mt-1 space-y-1">
+<!-- Hierarchy Item: Schema -->
+<div>
+<button class="w-full flex items-center gap-2 px-2 py-1 hover:bg-surface-container transition-colors rounded text-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-tertiary">expand_more</span>
+<span class="material-symbols-outlined text-tertiary">schema</span>
+                  core_models
+                </button>
+<div class="ml-6 mt-1 space-y-0.5">
+<button class="w-full flex items-center gap-2 px-2 py-1 bg-white shadow-sm border-l-2 border-primary rounded-r text-xs text-primary font-semibold">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">table</span>
+                    dim_customers
+                  </button>
+<button class="w-full flex items-center gap-2 px-2 py-1 hover:bg-surface-container transition-colors rounded text-xs text-outline">
+<span class="material-symbols-outlined">table</span>
+                    dim_products
+                  </button>
+<button class="w-full flex items-center gap-2 px-2 py-1 hover:bg-surface-container transition-colors rounded text-xs text-outline">
+<span class="material-symbols-outlined">view_quilt</span>
+                    fact_sales_v
+                  </button>
+</div>
+</div>
+<button class="w-full flex items-center gap-2 px-2 py-1 hover:bg-surface-container transition-colors rounded text-xs text-on-surface-variant">
+<span class="material-symbols-outlined">chevron_right</span>
+<span class="material-symbols-outlined text-tertiary">schema</span>
+                raw_ingest
+              </button>
+</div>
+</div>
+<!-- More Database Objects... -->
+<button class="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-surface-container transition-colors rounded text-sm text-on-surface-variant">
+<span class="material-symbols-outlined">chevron_right</span>
+<span class="material-symbols-outlined">database</span>
+            marketing_cloud
+          </button>
+</div>
+</section>
+<!-- Detail View Area -->
+<section class="flex-grow flex flex-col min-w-0">
+<!-- Editorial Header -->
+<header class="p-8 bg-surface-container-lowest">
+<div class="flex items-center gap-4 mb-2">
+<span class="px-2 py-0.5 bg-tertiary-container text-on-tertiary-container rounded-full text-[10px] font-bold uppercase tracking-wider">Dimension Table</span>
+<span class="text-outline text-xs flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">history</span>
+              Updated 4h ago
+            </span>
+</div>
+<h1 class="text-4xl font-black text-on-surface tracking-tight mb-2">dim_customers</h1>
+<p class="text-on-surface-variant text-sm max-w-2xl leading-relaxed">
+            Primary dimensional entity for customer demographics, subscription states, and behavioral segmentations. Derived from the CRM and Event Hub sync pipelines.
+          </p>
+<!-- Tabs Navigation -->
+<div class="flex gap-8 mt-8 border-b border-outline-variant/10">
+<button class="pb-3 border-b-2 border-primary text-primary font-bold text-sm px-1">Schema</button>
+<button class="pb-3 border-b-2 border-transparent text-outline hover:text-on-surface font-medium text-sm px-1">Sample Data</button>
+<button class="pb-3 border-b-2 border-transparent text-outline hover:text-on-surface font-medium text-sm px-1">Lineage</button>
+<button class="pb-3 border-b-2 border-transparent text-outline hover:text-on-surface font-medium text-sm px-1">Details</button>
+</div>
+</header>
+<!-- Dynamic Content Area -->
+<div class="flex-grow p-8 overflow-y-auto">
+<!-- Metadata Cards (Bento-style Grid) -->
+<div class="grid grid-cols-4 gap-6 mb-10">
+<div class="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/5">
+<p class="text-[10px] uppercase font-bold text-outline tracking-widest mb-1">Owner</p>
+<div class="flex items-center gap-2">
+<img alt="Owner" class="w-5 h-5 rounded-full" data-alt="Small round profile avatar of a tech-focused professional in a blue shirt" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAtgZ3ky_gMeVf8N8iSlqjpP0DiAPWjMffzDLa2SEVhUuYugOJfzMW52Cs-X3qxJsz5A5WLxGmZnYfiN0bh2FuzswPWDnw3WqT0_mwvr1A6LqQSxyk60mCGyKPORhvGMOP-wyChjWdtk33LBAsEt-J5Gv1V69VM6zVoRf4-txLfy6NcNH6Ck6FDinnqCzx_V7XcS5WOx8EfVEee5qVJyijeTvQnuuALLHy1-25V8oc83Q9Su50hta4dqgat-g0wwzPMa3IkxNUcUNM"/>
+<p class="text-sm font-semibold">Data Engineering Team</p>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/5">
+<p class="text-[10px] uppercase font-bold text-outline tracking-widest mb-1">Storage Size</p>
+<p class="text-xl font-bold text-primary">12.4 GB</p>
+</div>
+<div class="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/5">
+<p class="text-[10px] uppercase font-bold text-outline tracking-widest mb-1">Rows</p>
+<p class="text-xl font-bold text-primary">4,829,102</p>
+</div>
+<div class="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/5">
+<p class="text-[10px] uppercase font-bold text-outline tracking-widest mb-1">Quality Score</p>
+<div class="flex items-center gap-2">
+<p class="text-xl font-bold text-secondary">98.2%</p>
+<div class="h-1.5 w-16 bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[98%]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Table Schema View -->
+<div class="bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+<div class="px-6 py-4 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low/30">
+<h2 class="font-bold text-sm">Columns (18)</h2>
+<div class="flex items-center gap-2">
+<span class="text-xs text-outline font-medium">Export DDL</span>
+<span class="material-symbols-outlined text-outline text-lg cursor-pointer">file_download</span>
+</div>
+</div>
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low/20">
+<tr>
+<th class="px-6 py-3 text-[10px] uppercase font-bold text-outline tracking-wider">Column Name</th>
+<th class="px-6 py-3 text-[10px] uppercase font-bold text-outline tracking-wider">Data Type</th>
+<th class="px-6 py-3 text-[10px] uppercase font-bold text-outline tracking-wider">Primary Key</th>
+<th class="px-6 py-3 text-[10px] uppercase font-bold text-outline tracking-wider">Nullable</th>
+<th class="px-6 py-3 text-[10px] uppercase font-bold text-outline tracking-wider">Description</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/5">
+<tr class="hover:bg-surface-container-low/20 transition-colors">
+<td class="px-6 py-4 text-sm font-semibold font-headline">customer_id</td>
+<td class="px-6 py-4 text-xs font-mono text-tertiary">VARCHAR(36)</td>
+<td class="px-6 py-4"><span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">key</span></td>
+<td class="px-6 py-4 text-xs text-outline">NO</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">Unique identifier generated by CRM system.</td>
+</tr>
+<tr class="hover:bg-surface-container-low/20 transition-colors bg-surface-container-low/5">
+<td class="px-6 py-4 text-sm font-semibold font-headline">email_address</td>
+<td class="px-6 py-4 text-xs font-mono text-tertiary">VARCHAR(255)</td>
+<td class="px-6 py-4"></td>
+<td class="px-6 py-4 text-xs text-outline">NO</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">Primary contact email, normalized to lowercase.</td>
+</tr>
+<tr class="hover:bg-surface-container-low/20 transition-colors">
+<td class="px-6 py-4 text-sm font-semibold font-headline">account_tier</td>
+<td class="px-6 py-4 text-xs font-mono text-tertiary">ENUM</td>
+<td class="px-6 py-4"></td>
+<td class="px-6 py-4 text-xs text-outline">YES</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">Customer billing tier (Free, Pro, Enterprise).</td>
+</tr>
+<tr class="hover:bg-surface-container-low/20 transition-colors bg-surface-container-low/5">
+<td class="px-6 py-4 text-sm font-semibold font-headline">created_at</td>
+<td class="px-6 py-4 text-xs font-mono text-tertiary">TIMESTAMP</td>
+<td class="px-6 py-4"></td>
+<td class="px-6 py-4 text-xs text-outline">NO</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">System timestamp when the record was created.</td>
+</tr>
+<tr class="hover:bg-surface-container-low/20 transition-colors">
+<td class="px-6 py-4 text-sm font-semibold font-headline">lifetime_value</td>
+<td class="px-6 py-4 text-xs font-mono text-tertiary">DECIMAL(12,2)</td>
+<td class="px-6 py-4"></td>
+<td class="px-6 py-4 text-xs text-outline">YES</td>
+<td class="px-6 py-4 text-xs text-on-surface-variant">Total cumulative revenue assigned to this customer.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Visual Statistics -->
+<div class="mt-10 grid grid-cols-2 gap-8">
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/5">
+<h3 class="font-bold text-sm mb-4">Values Distribution (account_tier)</h3>
+<div class="space-y-4">
+<div class="space-y-1">
+<div class="flex justify-between text-xs mb-1">
+<span class="font-medium">Enterprise</span>
+<span class="text-outline">12,402 (2.4%)</span>
+</div>
+<div class="h-2 bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[2.4%]"></div>
+</div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between text-xs mb-1">
+<span class="font-medium">Pro</span>
+<span class="text-outline">184,291 (38.1%)</span>
+</div>
+<div class="h-2 bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[38.1%]"></div>
+</div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between text-xs mb-1">
+<span class="font-medium">Free</span>
+<span class="text-outline">285,109 (59.5%)</span>
+</div>
+<div class="h-2 bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[59.5%]"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/5 relative overflow-hidden">
+<div class="relative z-10">
+<h3 class="font-bold text-sm mb-2">Lineage Preview</h3>
+<p class="text-xs text-outline mb-4">Originating from CRM_POSTGRES_PROD</p>
+<div class="flex items-center gap-4">
+<div class="p-3 bg-surface-container-high rounded border border-outline-variant/20 text-xs font-mono">raw_crm_users</div>
+<span class="material-symbols-outlined text-outline">arrow_forward</span>
+<div class="p-3 bg-primary text-white rounded shadow-md text-xs font-mono">dim_customers</div>
+<span class="material-symbols-outlined text-outline">arrow_forward</span>
+<div class="p-3 bg-surface-container-high rounded border border-outline-variant/20 text-xs font-mono">mrt_sales_rep_perf</div>
+</div>
+</div>
+<!-- Decorative Abstract Background -->
+<div class="absolute -right-4 -bottom-4 w-32 h-32 opacity-5 rotate-12">
+<span class="material-symbols-outlined text-[120px]">account_tree</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+</div>
+<script src="./interactions.js"></script>
+</body></html>

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Data Cathedral | Platform Monitoring</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-secondary": "#ffffff",
+                        "surface-container-low": "#f3f4f6",
+                        "inverse-on-surface": "#f0f1f3",
+                        "primary-container": "#3e5f74",
+                        "tertiary": "#4a3a72",
+                        "surface-bright": "#f8f9fb",
+                        "surface-dim": "#d9dadc",
+                        "background": "#f8f9fb",
+                        "on-secondary-fixed-variant": "#004e5d",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#dbccff",
+                        "on-tertiary-fixed": "#201047",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed-dim": "#cfbdfe",
+                        "tertiary-fixed": "#e9ddff",
+                        "on-secondary-fixed": "#001f26",
+                        "primary": "#25475c",
+                        "error-container": "#ffdad6",
+                        "inverse-primary": "#a9cbe4",
+                        "secondary-fixed": "#adecff",
+                        "on-primary-fixed-variant": "#294a5f",
+                        "surface-container": "#edeef0",
+                        "primary-fixed": "#c7e7ff",
+                        "on-background": "#191c1e",
+                        "on-secondary-container": "#006374",
+                        "primary-fixed-dim": "#a9cbe4",
+                        "on-primary-fixed": "#001e2e",
+                        "secondary": "#00687a",
+                        "outline-variant": "#c3c6d6",
+                        "surface-container-high": "#e7e8ea",
+                        "on-surface-variant": "#434654",
+                        "inverse-surface": "#2e3132",
+                        "surface-container-highest": "#e1e2e4",
+                        "surface-variant": "#e1e2e4",
+                        "surface-tint": "#416278",
+                        "secondary-fixed-dim": "#5dd6f3",
+                        "secondary-container": "#6ae1ff",
+                        "on-surface": "#191c1e",
+                        "error": "#ba1a1a",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "on-primary-container": "#b5d7f1",
+                        "on-tertiary-fixed-variant": "#4d3d75",
+                        "outline": "#737685",
+                        "surface": "#f8f9fb",
+                        "tertiary-container": "#62528b",
+                        "on-tertiary": "#ffffff"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .tonal-shift { transition: background-color 0.2s ease; }
+        .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(24px); }
+        .primary-gradient { background: linear-gradient(135deg, #25475c 0%, #3e5f74 100%); }
+    </style>
+</head>
+<body class="bg-surface text-on-surface">
+<!-- TopNavBar -->
+<header class="bg-white dark:bg-slate-900 w-full h-16 border-b border-slate-200/50 dark:border-slate-800/50 flex justify-between items-center px-6 sticky top-0 z-40 tonal-shift">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold tracking-tighter text-slate-900 dark:text-slate-50 font-headline">Data Cathedral</span>
+<div class="hidden md:flex items-center bg-surface-container-highest rounded-xl px-3 py-1.5 gap-2">
+<span class="material-symbols-outlined text-outline text-sm" data-icon="search">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm font-label w-64 p-0" placeholder="Search infrastructure..." type="text"/>
+</div>
+</div>
+<nav class="flex items-center gap-4">
+<button class="bg-primary text-on-primary px-4 py-2 rounded-xl text-sm font-medium primary-gradient hover:scale-95 duration-100 ease-in-out">Create New</button>
+<button class="text-primary dark:text-blue-400 font-manrope tracking-tight text-sm font-medium px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors rounded-xl">Run Query</button>
+<div class="flex items-center gap-2 ml-2 border-l border-outline-variant/30 pl-4">
+<span class="material-symbols-outlined text-slate-500 hover:bg-slate-100 p-2 rounded-full cursor-pointer" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined text-slate-500 hover:bg-slate-100 p-2 rounded-full cursor-pointer" data-icon="settings">settings</span>
+<span class="material-symbols-outlined text-slate-500 hover:bg-slate-100 p-2 rounded-full cursor-pointer" data-icon="help">help</span>
+<div class="w-8 h-8 rounded-full overflow-hidden ml-2 bg-surface-container">
+<img alt="User Profile" data-alt="Close-up portrait of a professional male software architect with neutral lighting and clean studio background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQLa-FucYk3aZcsTWplXDXDEUQd2bNgvFf9t020sJB0XZlm9HECKLtTPx3rg7tmzqVcNq5ckeasfKyFtpw5nt_pFIZvQts3Z8b7_0lshOEuGx8w4MHJR-e7_XmY8VIwQUfnx-_wIqj7ggmvB8Wd5g1uPg8vlM8O7Mi3nRXmegnQM4qIsKWCxOwRcemcBbF_r7HfC281VpyZBCM9qve0Z4qPn82imDVjY2_cQdnyU0UVfbfuY4DOIH3JqXrqxV3FuaDBwpXZnEhkNw"/>
+</div>
+</div>
+</nav>
+</header>
+<div class="flex">
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-16 bg-slate-100 dark:bg-slate-950 border-r border-slate-200/20 dark:border-slate-800/20 flex flex-col py-4 gap-2 z-30">
+<div class="px-6 mb-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center text-white">
+<span class="material-symbols-outlined" data-icon="account_tree" style="font-variation-settings: 'FILL' 1;">account_tree</span>
+</div>
+<div>
+<p class="font-manrope text-xs uppercase tracking-widest font-bold text-slate-800">Infrastructure</p>
+<p class="text-[10px] text-slate-500 font-medium">Prod-Region-1</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-200/50 transition-all font-manrope text-xs uppercase tracking-widest font-bold" href="#">
+<span class="material-symbols-outlined" data-icon="database">database</span> Catalog
+                </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-200/50 transition-all font-manrope text-xs uppercase tracking-widest font-bold" href="#">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span> Worksheets
+                </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-200/50 transition-all font-manrope text-xs uppercase tracking-widest font-bold" href="#">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span> Workflows
+                </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-blue-700 bg-white/50 border-r-2 border-blue-600 font-manrope text-xs uppercase tracking-widest font-bold" href="#">
+<span class="material-symbols-outlined" data-icon="analytics" style="font-variation-settings: 'FILL' 1;">analytics</span> Monitoring
+                </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-200/50 transition-all font-manrope text-xs uppercase tracking-widest font-bold" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span> Dashboard
+                </a>
+</nav>
+<div class="mt-auto px-3 border-t border-slate-200/50 pt-4 pb-16">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-slate-200/50 font-manrope text-xs uppercase tracking-widest font-bold" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span> Documentation
+                </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-slate-200/50 font-manrope text-xs uppercase tracking-widest font-bold" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span> Settings
+                </a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 ml-64 p-8 bg-surface">
+<!-- Editorial Header -->
+<div class="mb-10">
+<p class="font-label text-sm uppercase tracking-widest text-outline mb-1 font-bold">Systems Overview</p>
+<h1 class="font-headline text-4xl font-extrabold text-on-surface tracking-tighter">Infrastructure Intelligence</h1>
+</div>
+<!-- Bento Grid: Key Metrics -->
+<div class="grid grid-cols-12 gap-6 mb-12">
+<div class="col-span-12 lg:col-span-8 bg-surface-container-lowest rounded-xl p-6 tonal-shift hover:shadow-xl hover:shadow-on-surface/5 transition-all">
+<div class="flex justify-between items-start mb-8">
+<div>
+<h3 class="font-headline text-lg font-bold">Compute Utilization</h3>
+<p class="text-outline text-xs">Real-time resource allocation across clusters</p>
+</div>
+<div class="flex gap-2">
+<span class="px-3 py-1 bg-surface-container rounded-full text-[10px] font-bold text-primary">24H</span>
+<span class="px-3 py-1 text-[10px] font-bold text-outline">7D</span>
+</div>
+</div>
+<div class="h-48 flex items-end gap-3 px-4">
+<!-- Pseudo-chart columns -->
+<div class="flex-1 bg-surface-container-low rounded-t-lg h-[40%] transition-all hover:bg-primary-container/20"></div>
+<div class="flex-1 bg-surface-container-low rounded-t-lg h-[65%] transition-all hover:bg-primary-container/20"></div>
+<div class="flex-1 bg-primary-container/80 rounded-t-lg h-[85%] transition-all hover:bg-primary-container"></div>
+<div class="flex-1 bg-surface-container-low rounded-t-lg h-[55%] transition-all hover:bg-primary-container/20"></div>
+<div class="flex-1 bg-surface-container-low rounded-t-lg h-[75%] transition-all hover:bg-primary-container/20"></div>
+<div class="flex-1 bg-secondary rounded-t-lg h-[92%] transition-all hover:bg-secondary-container"></div>
+<div class="flex-1 bg-surface-container-low rounded-t-lg h-[60%] transition-all hover:bg-primary-container/20"></div>
+<div class="flex-1 bg-surface-container-low rounded-t-lg h-[45%] transition-all hover:bg-primary-container/20"></div>
+<div class="flex-1 bg-primary-container/80 rounded-t-lg h-[70%] transition-all hover:bg-primary-container"></div>
+<div class="flex-1 bg-surface-container-low rounded-t-lg h-[50%] transition-all hover:bg-primary-container/20"></div>
+</div>
+<div class="flex justify-between mt-4 text-[10px] text-outline font-bold uppercase tracking-tighter">
+<span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:59</span>
+</div>
+</div>
+<div class="col-span-12 lg:col-span-4 grid grid-rows-2 gap-6">
+<div class="bg-primary-container rounded-xl p-6 text-white flex flex-col justify-between primary-gradient">
+<div>
+<span class="material-symbols-outlined text-on-primary-container/60 mb-2" data-icon="account_balance_wallet">account_balance_wallet</span>
+<p class="text-xs text-on-primary-container font-medium uppercase tracking-widest">Monthly Spend</p>
+</div>
+<div>
+<p class="text-3xl font-headline font-black">$42,891.20</p>
+<p class="text-[10px] text-on-primary-container/80 mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="trending_up">trending_up</span> 12.4% from last month
+                            </p>
+</div>
+</div>
+<div class="bg-tertiary-container rounded-xl p-6 text-white flex flex-col justify-between">
+<div>
+<span class="material-symbols-outlined text-on-tertiary-container/60 mb-2" data-icon="storage">storage</span>
+<p class="text-xs text-on-tertiary-container font-medium uppercase tracking-widest">Warehouse Usage</p>
+</div>
+<div>
+<p class="text-3xl font-headline font-black">1.4 PB</p>
+<div class="w-full bg-tertiary/30 h-1.5 rounded-full mt-3 overflow-hidden">
+<div class="bg-tertiary-fixed h-full w-[82%]"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Tabs Section -->
+<div class="mb-6 flex gap-8 border-b border-outline-variant/20">
+<button class="pb-4 border-b-2 border-primary text-primary font-bold text-sm">Access Management</button>
+<button class="pb-4 text-outline hover:text-on-surface text-sm transition-colors">Activity Logs</button>
+<button class="pb-4 text-outline hover:text-on-surface text-sm transition-colors">Cluster Health</button>
+<button class="pb-4 text-outline hover:text-on-surface text-sm transition-colors">Billing Policy</button>
+</div>
+<!-- User Management & Audit Trial -->
+<div class="grid grid-cols-12 gap-8">
+<!-- User Table -->
+<div class="col-span-12 xl:col-span-8">
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden">
+<div class="p-6 flex justify-between items-center border-b border-surface-container">
+<h3 class="font-headline font-bold text-lg">Platform Users</h3>
+<div class="flex gap-2">
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors"><span class="material-symbols-outlined text-outline" data-icon="filter_list">filter_list</span></button>
+<button class="px-4 py-2 bg-surface-container-high rounded-xl text-xs font-bold text-primary">Invite Member</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead class="bg-surface-container-low text-[10px] uppercase tracking-widest text-outline font-bold">
+<tr>
+<th class="px-6 py-4">User Identity</th>
+<th class="px-6 py-4">Access Role</th>
+<th class="px-6 py-4">Status</th>
+<th class="px-6 py-4">Last Active</th>
+<th class="px-6 py-4"></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container">
+<tr class="hover:bg-surface-container-low/50 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container/20 flex items-center justify-center text-secondary font-bold text-xs">EL</div>
+<div>
+<p class="text-sm font-bold">Erik Lindholm</p>
+<p class="text-[10px] text-outline">e.lindholm@datacathedral.io</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4 text-xs font-medium">Platform Admin</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">ACTIVE</span>
+</td>
+<td class="px-6 py-4 text-xs text-outline">2 mins ago</td>
+<td class="px-6 py-4 text-right">
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-on-surface" data-icon="more_vert">more_vert</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-tertiary-container/20 flex items-center justify-center text-tertiary font-bold text-xs">SK</div>
+<div>
+<p class="text-sm font-bold">Sarah Kovach</p>
+<p class="text-[10px] text-outline">s.kovach@datacathedral.io</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4 text-xs font-medium">Data Engineer</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">ACTIVE</span>
+</td>
+<td class="px-6 py-4 text-xs text-outline">1 hour ago</td>
+<td class="px-6 py-4 text-right">
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-on-surface" data-icon="more_vert">more_vert</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-outline font-bold text-xs">JM</div>
+<div>
+<p class="text-sm font-bold">James Miller</p>
+<p class="text-[10px] text-outline">j.miller@datacathedral.io</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4 text-xs font-medium">Analyst (Read-Only)</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 bg-surface-container text-outline rounded-full text-[10px] font-bold">INACTIVE</span>
+</td>
+<td class="px-6 py-4 text-xs text-outline">4 days ago</td>
+<td class="px-6 py-4 text-right">
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-on-surface" data-icon="more_vert">more_vert</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Activity Rail -->
+<div class="col-span-12 xl:col-span-4">
+<div class="bg-surface-container-low rounded-xl p-6">
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-headline font-bold text-lg">Audit Trail</h3>
+<span class="material-symbols-outlined text-primary text-xl" data-icon="history">history</span>
+</div>
+<div class="space-y-6">
+<div class="relative pl-8 before:absolute before:left-0 before:top-2 before:w-2 before:h-2 before:bg-primary before:rounded-full before:z-10 after:absolute after:left-[3px] after:top-4 after:w-[2px] after:h-[calc(100%+1.5rem)] after:bg-outline-variant/30">
+<p class="text-xs font-bold text-on-surface">Warehouse Config Changed</p>
+<p class="text-[10px] text-outline mt-1">E. Lindholm updated 'Prod-Core-1' scaling policy to 'Aggressive'.</p>
+<p class="text-[10px] text-primary/70 mt-1 font-bold">14:22 PM</p>
+</div>
+<div class="relative pl-8 before:absolute before:left-0 before:top-2 before:w-2 before:h-2 before:bg-outline-variant before:rounded-full before:z-10 after:absolute after:left-[3px] after:top-4 after:w-[2px] after:h-[calc(100%+1.5rem)] after:bg-outline-variant/30">
+<p class="text-xs font-bold text-on-surface">New Access Key Created</p>
+<p class="text-[10px] text-outline mt-1">Sarah Kovach generated a new API key for the 'Inventory' workflow.</p>
+<p class="text-[10px] text-outline/70 mt-1 font-bold">12:05 PM</p>
+</div>
+<div class="relative pl-8 before:absolute before:left-0 before:top-2 before:w-2 before:h-2 before:bg-error before:rounded-full before:z-10 after:absolute after:left-[3px] after:top-4 after:w-[2px] after:h-[calc(100%+1.5rem)] after:bg-outline-variant/30">
+<p class="text-xs font-bold text-on-surface">Critical Alert: Data Spill</p>
+<p class="text-[10px] text-outline mt-1">Unauthorized egress detected in 'Regional-Backup-A' partition.</p>
+<p class="text-[10px] text-error mt-1 font-bold">09:45 AM</p>
+</div>
+<div class="relative pl-8 before:absolute before:left-0 before:top-2 before:w-2 before:h-2 before:bg-outline-variant before:rounded-full before:z-10">
+<p class="text-xs font-bold text-on-surface">Scheduled Backup Completed</p>
+<p class="text-[10px] text-outline mt-1">Nightly snapshot of 'Infrastructure-Catalog' finalized successfully.</p>
+<p class="text-[10px] text-outline/70 mt-1 font-bold">04:00 AM</p>
+</div>
+</div>
+<button class="w-full mt-8 py-3 text-xs font-bold text-primary hover:bg-white rounded-xl transition-all border border-primary/10">View Full Platform History</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+<script src="./interactions.js"></script>
+</body></html>
