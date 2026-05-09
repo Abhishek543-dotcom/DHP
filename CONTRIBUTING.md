@@ -55,6 +55,10 @@ Run tests before opening a PR:
 make test
 ```
 
+CI runs linting (`ruff`) and tests (`pytest`) automatically via:
+- **GitHub Actions** (`.github/workflows/ci.yml`) — on every PR and push to `main`.
+- **Jenkins** (`Jenkinsfile`) — during `build-only` and `deploy` actions when `RUN_TESTS=true`.
+
 When relevant, also validate:
 
 - Endpoint behavior in Swagger (`/docs`)
@@ -79,8 +83,12 @@ Update markdown docs when you change:
 
 - API routes, payloads, status codes, auth headers
 - Runtime behavior (job lifecycle, retries, callbacks)
-- Infrastructure (compose, k8s, observability)
+- Infrastructure (compose, k8s, terraform, observability)
+- CI/CD pipelines (`Jenkinsfile` or `.github/workflows/`)
 - New runbook procedures or troubleshooting guidance
+
+Changes to the `Jenkinsfile` or GitHub Actions workflows should be reviewed for
+security implications (credential exposure, approval gate bypass, etc.).
 
 ## 8. Security and Responsible Disclosure
 

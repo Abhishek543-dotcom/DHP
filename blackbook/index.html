@@ -39,6 +39,7 @@
             <li><a href="#security-model" class="hover:text-blue-600 font-medium">8. Security Model</a></li>
             <li><a href="#operations-runbook" class="hover:text-blue-600 font-medium">9. Operations & Runbook</a></li>
             <li><a href="#api-reference" class="hover:text-blue-600 font-medium">10. API Reference</a></li>
+            <li><a href="#cicd-deployment" class="hover:text-blue-600 font-medium">11. CI/CD & Deployment</a></li>
         </ul>
     </nav>
 
@@ -326,7 +327,7 @@ kubectl cluster-info</code></pre>
             </ul>
         </section>
 
-        <section id="api-reference" class="content-section border-none">
+        <section id="api-reference" class="content-section">
             <h2 class="text-3xl">10. API Reference Highlights</h2>
             <p>Full OpenAPI specifications are available at <code>/docs</code> for each service port. Below are critical endpoints.</p>
 
@@ -349,8 +350,164 @@ kubectl cluster-info</code></pre>
             </ul>
         </section>
 
+        <section id="cicd-deployment" class="content-section border-none">
+            <h2 class="text-3xl">11. CI/CD & Deployment</h2>
+            <p>DHP supports two CI/CD systems for deploying to AWS ECS Fargate. Both produce the same outcome: updated ECR images, migrated database schema, and rolling ECS service deployments.</p>
+
+            <h3 class="text-2xl">Dual CI/CD Strategy</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Aspect</th>
+                        <th>GitHub Actions</th>
+                        <th>Jenkins</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Config file</strong></td>
+                        <td><code>.github/workflows/deploy.yml</code></td>
+                        <td><code>Jenkinsfile</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Authentication</strong></td>
+                        <td>OIDC (no static credentials)</td>
+                        <td>Static IAM credentials via Jenkins Credential Store</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Trigger</strong></td>
+                        <td>Push to <code>main</code> / manual dispatch</td>
+                        <td>Manual (Build with Parameters)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Infra management</strong></td>
+                        <td>Not included (Terraform run separately)</td>
+                        <td>Built-in <code>infra-plan</code> / <code>infra-apply</code> / <code>infra-destroy</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Approval gate</strong></td>
+                        <td>N/A (auto-deploys on main)</td>
+                        <td>Manual <code>input</code> step (skip with AUTO_APPROVE)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Parallelism</strong></td>
+                        <td>GitHub matrix (separate runners)</td>
+                        <td>Jenkins parallel stages (single agent)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 class="text-2xl">Jenkins Pipeline Overview</h3>
+            <p>The Jenkins pipeline is controlled by the <code>DEPLOY_ACTION</code> parameter:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>Stages Executed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>build-only</code></td>
+                        <td>Checkout &rarr; Preflight &rarr; Lint &rarr; Test &rarr; Build &amp; Push Images (parallel)</td>
+                    </tr>
+                    <tr>
+                        <td><code>deploy</code></td>
+                        <td>All of <code>build-only</code> + DB Migrations &rarr; Approval &rarr; Deploy ECS Services (parallel) &rarr; Smoke Test</td>
+                    </tr>
+                    <tr>
+                        <td><code>infra-plan</code></td>
+                        <td>Checkout &rarr; Preflight &rarr; Terraform Init &rarr; Validate &rarr; Plan</td>
+                    </tr>
+                    <tr>
+                        <td><code>infra-apply</code></td>
+                        <td>All of <code>infra-plan</code> + Approval &rarr; Apply</td>
+                    </tr>
+                    <tr>
+                        <td><code>infra-destroy</code></td>
+                        <td>Checkout &rarr; Preflight &rarr; Terraform Init &rarr; Validate &rarr; Destroy Plan &rarr; Approval &rarr; Destroy</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 class="text-2xl">Jenkins Pipeline Parameters</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Default</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>DEPLOY_ACTION</code></td>
+                        <td>build-only</td>
+                        <td>Pipeline action to execute</td>
+                    </tr>
+                    <tr>
+                        <td><code>ENVIRONMENT</code></td>
+                        <td>dev</td>
+                        <td>Target environment (dev/staging/prod)</td>
+                    </tr>
+                    <tr>
+                        <td><code>AWS_REGION</code></td>
+                        <td>us-east-1</td>
+                        <td>AWS region for deployment</td>
+                    </tr>
+                    <tr>
+                        <td><code>IMAGE_TAG</code></td>
+                        <td><em>empty</em></td>
+                        <td>Docker tag; defaults to 12-char Git SHA</td>
+                    </tr>
+                    <tr>
+                        <td><code>AUTO_APPROVE</code></td>
+                        <td>false</td>
+                        <td>Skip the manual approval step</td>
+                    </tr>
+                    <tr>
+                        <td><code>RUN_TESTS</code></td>
+                        <td>true</td>
+                        <td>Run unit tests before building</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 class="text-2xl">Deployment Flow Diagram</h3>
+            <div class="mermaid bg-gray-50 p-4 rounded-lg flex justify-center border">
+                graph LR
+                    A[Checkout] --> B[Preflight]
+                    B --> C[Lint]
+                    C --> D[Test]
+                    D --> E[Build &amp; Push<br/>8 images parallel]
+                    E --> F[DB Migrations<br/>ECS RunTask]
+                    F --> G{Approval}
+                    G --> H[Deploy ECS<br/>6 services parallel]
+                    H --> I[Smoke Test]
+            </div>
+
+            <h3 class="text-2xl">Jenkins Prerequisites</h3>
+            <ul class="list-disc pl-6 space-y-2 mb-4">
+                <li>Jenkins credential <code>aws-jenkins-creds</code> (type: Amazon Web Services Credentials)</li>
+                <li>Docker daemon available on the Jenkins agent</li>
+                <li>Terraform installed (path: <code>TERRAFORM_BIN</code> in Jenkinsfile, default <code>/opt/homebrew/bin/terraform</code>)</li>
+                <li>AWS CLI v2 installed (path: <code>AWS_BIN</code> in Jenkinsfile, default <code>/usr/local/bin/aws</code>)</li>
+                <li>Python 3 with <code>ruff</code> and <code>pytest</code> available on the agent</li>
+            </ul>
+
+            <h3 class="text-2xl">GitHub Actions Workflow</h3>
+            <p>The GitHub Actions workflow (<code>.github/workflows/deploy.yml</code>) is triggered on push to <code>main</code> and:</p>
+            <ol class="list-decimal pl-6 space-y-2 mb-4">
+                <li>Builds and pushes all Docker images to ECR using GitHub OIDC for authentication.</li>
+                <li>Runs Alembic database migrations via <code>ecs run-task</code>.</li>
+                <li>Registers new ECS task definitions with the updated image tags and forces rolling deployments.</li>
+                <li>Waits for all services to reach a stable state.</li>
+            </ol>
+        </section>
+
         <footer class="mt-12 pt-6 border-t text-center text-gray-400 text-sm">
-            <p>Generated for DataHarbour Project (DHP) Documentation &bull; Deployed via GitHub Actions</p>
+            <p>Generated for DataHarbour Project (DHP) Documentation &bull; Deployed via GitHub Actions / Jenkins</p>
         </footer>
 
     </main>

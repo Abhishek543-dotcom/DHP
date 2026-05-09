@@ -1,7 +1,10 @@
 # DHP on AWS ECS — Deployment Guide
 
 This document covers deploying DHP onto AWS using the Terraform stack
-in `infra/terraform/` and the GitHub Actions workflows in `.github/workflows/`.
+in `infra/terraform/`. Two CI/CD systems are supported:
+
+- **GitHub Actions** (`.github/workflows/deploy.yml`) — OIDC-based, automatic on push to `main`.
+- **Jenkins** (`Jenkinsfile` at repo root) — Credential-based, parameterized pipeline with manual triggers.
 
 ## Architecture
 
@@ -189,6 +192,67 @@ You can follow it via:
 aws ecs list-tasks --cluster dhp-$ENV-cluster --family dhp-$ENV-spark
 aws logs tail /dhp/$ENV/spark --follow
 ```
+
+## Deploying via Jenkins
+
+The `Jenkinsfile` at the repository root provides a parameterized pipeline that
+handles both application deployment and infrastructure management.
+
+### Jenkins prerequisites
+
+- Jenkins credential `aws-jenkins-creds` (type: Amazon Web Services Credentials)
+- Docker daemon available on the Jenkins agent
+- Terraform installed (path configured via `TERRAFORM_BIN` env in Jenkinsfile)
+- AWS CLI v2 installed (path configured via `AWS_BIN` env in Jenkinsfile)
+- Python 3, `ruff`, `pytest` on the agent (or the pipeline installs them)
+
+### Pipeline parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `DEPLOY_ACTION` | `build-only` | `build-only`, `deploy`, `infra-plan`, `infra-apply`, `infra-destroy` |
+| `ENVIRONMENT` | `dev` | Target environment: `dev`, `staging`, `prod` |
+| `AWS_REGION` | `us-east-1` | AWS region |
+| `IMAGE_TAG` | *(empty)* | Docker image tag; defaults to 12-char Git SHA |
+| `AUTO_APPROVE` | `false` | Skip manual approval gate |
+| `RUN_TESTS` | `true` | Run unit tests before build |
+
+### Pipeline actions explained
+
+| Action | Stages executed |
+|--------|----------------|
+| `build-only` | Checkout → Preflight → Lint → Test → Build & Push Images |
+| `deploy` | All of `build-only` + Run DB Migrations → Approval → Deploy ECS Services → Smoke Test |
+| `infra-plan` | Checkout → Preflight → Terraform Init → Validate → Plan |
+| `infra-apply` | All of `infra-plan` + Approval → Apply |
+| `infra-destroy` | Checkout → Preflight → Terraform Init → Validate → Destroy Plan → Approval → Destroy |
+
+### Running a deploy via Jenkins
+
+1. Open the Jenkins job and click **Build with Parameters**.
+2. Set `DEPLOY_ACTION` = `deploy`, choose `ENVIRONMENT`, confirm `AWS_REGION`.
+3. Optionally set a specific `IMAGE_TAG` or leave blank for Git SHA.
+4. The pipeline builds all 8 images in parallel, pushes to ECR, runs Alembic migrations via `ecs run-task`, then waits for approval.
+5. After approval, it updates all ECS task definitions and forces new deployments in parallel.
+6. The smoke test stage hits each service's `/health/ready` endpoint via the ALB.
+
+### Running infrastructure changes via Jenkins
+
+1. Set `DEPLOY_ACTION` = `infra-plan` first to review the Terraform plan (archived as `tfplan.txt`).
+2. If satisfied, re-run with `DEPLOY_ACTION` = `infra-apply`.
+3. The pipeline passes `-var="environment=..."`, `-var="aws_region=..."`, and `-var="image_tag=..."` to Terraform.
+
+### Comparison: GitHub Actions vs Jenkins
+
+| Aspect | GitHub Actions | Jenkins |
+|--------|---------------|---------|
+| Auth | OIDC (no static creds) | Static IAM credentials |
+| Trigger | Push to `main` / manual dispatch | Manual (Build with Parameters) |
+| Infra management | Not included (Terraform run separately) | Built-in `infra-plan`/`infra-apply`/`infra-destroy` |
+| Approval gate | N/A (auto-deploys) | Manual `input` step (skip with `AUTO_APPROVE`) |
+| Build parallelism | GitHub matrix (separate runners) | Jenkins parallel stages (single agent) |
+
+---
 
 ## Configuration reference
 

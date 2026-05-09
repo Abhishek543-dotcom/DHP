@@ -72,11 +72,14 @@ make up
 ### AWS deployment
 
 DHP can be deployed onto AWS ECS Fargate using the Terraform stack in
-`infra/terraform/` and the GitHub Actions workflow in
-`.github/workflows/deploy.yml`. The orchestrator launches Spark jobs via
-`ecs:RunTask` instead of Kubernetes when running on AWS.
+`infra/terraform/`. Two CI/CD paths are available:
 
-See [`docs/aws-deployment.md`](docs/aws-deployment.md) for the full guide.
+- **GitHub Actions** (`.github/workflows/deploy.yml`) — OIDC-based, triggers on push to `main` or manual dispatch.
+- **Jenkins** (`Jenkinsfile`) — Credential-based, supports `build-only`, `deploy`, `infra-plan`, `infra-apply`, and `infra-destroy` actions via parameterized pipeline.
+
+The orchestrator launches Spark jobs via `ecs:RunTask` instead of Kubernetes when running on AWS.
+
+See [`docs/aws-deployment.md`](docs/aws-deployment.md) for the full guide (covers both CI/CD paths).
 
 After startup:
 
@@ -226,12 +229,19 @@ make db-reset
 
 ```text
 .
+├── Jenkinsfile                 # Jenkins CI/CD pipeline (deploy + infra)
+├── .github/workflows/          # GitHub Actions CI/CD
+│   ├── ci.yml
+│   └── deploy.yml
 ├── docs/
 │   ├── architecture.md
+│   ├── aws-deployment.md
+│   ├── disaster-recovery.md
 │   ├── runbook.md
 │   └── postman/
 ├── infra/
 │   ├── docker-compose.dev.yaml
+│   ├── terraform/              # AWS infrastructure (ECS, RDS, MSK, ALB, etc.)
 │   ├── prometheus/
 │   ├── grafana/
 │   └── k8s/
@@ -246,12 +256,16 @@ make db-reset
 │   ├── base/
 │   ├── spark-history/
 │   └── jobs/
+├── blackbook/                  # Static HTML project documentation
+├── db/                         # Alembic database migrations
 └── scripts/
 ```
 
 ## Additional Documentation
 
 - Architecture details: `docs/architecture.md`
+- AWS deployment guide: `docs/aws-deployment.md`
+- Disaster recovery: `docs/disaster-recovery.md`
 - Operations runbook: `docs/runbook.md`
 - Contributing guide: `CONTRIBUTING.md`
 - Security policy: `SECURITY.md`

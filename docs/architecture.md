@@ -226,6 +226,21 @@ Planned hardening direction:
 - Orchestrator RBAC for managing Spark jobs
 - Optional network policy for Spark pod egress control
 
+### 8.3 Jenkins Pipeline
+
+The `Jenkinsfile` at the repository root provides a single parameterized pipeline
+covering both application deployment and infrastructure management:
+
+- **App deployment** (`deploy`): Lint → Test → Build & Push (8 images in parallel) → DB Migrations → Approval → Deploy ECS Services (parallel) → Smoke Test.
+- **Infrastructure** (`infra-plan` / `infra-apply` / `infra-destroy`): Terraform init → validate → plan → approval → apply/destroy.
+
+Jenkins uses static AWS credentials (`AmazonWebServicesCredentialsBinding`) and
+includes a manual approval gate before apply/deploy actions. This contrasts with
+the GitHub Actions workflow which uses OIDC and auto-deploys on push to `main`.
+
+Both CI systems produce the same result: updated ECR images, migrated database,
+and rolling ECS service deployments.
+
 ## 9. Known Architectural Constraints
 
 - Local mode depends on a running local Kubernetes cluster for Spark execution.

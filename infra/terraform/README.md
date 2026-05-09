@@ -40,7 +40,9 @@ First apply will fail-fast on missing ECR images. After `apply` completes the
 infra exists but ECS tasks will keep restarting until you push images:
 
 ```bash
-# CI does this automatically; manual bootstrap example:
+# CI does this automatically via GitHub Actions (.github/workflows/deploy.yml)
+# or Jenkins (Jenkinsfile at repo root with DEPLOY_ACTION=build-only or deploy).
+# Manual bootstrap example:
 aws ecr get-login-password --region us-east-1 | \
   docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-1.amazonaws.com
 
@@ -49,6 +51,10 @@ docker build -t <account>.dkr.ecr.us-east-1.amazonaws.com/dhp-dev/job-service:la
 docker push <account>.dkr.ecr.us-east-1.amazonaws.com/dhp-dev/job-service:latest
 # repeat for each service
 ```
+
+The Jenkins pipeline also supports `infra-plan`, `infra-apply`, and `infra-destroy`
+actions that wrap Terraform with approval gates and credential injection.
+See `docs/aws-deployment.md` for the full Jenkins deployment guide.
 
 ## Environment profiles
 

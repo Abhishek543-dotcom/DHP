@@ -452,3 +452,68 @@ Leave `GLUE_CATALOG_DATABASE` unset. `GlueCatalogClient.enabled` returns False a
 - Local: not provisioned in docker-compose (uses live Spark UI from the running container).
 - AWS: navigate to `https://<alb_dns>/spark-history/` once the ECS service is healthy. The service tails `s3://<logs-bucket>/spark-events/`. Health check: `GET /spark-history/api/v1/applications`.
 - If apps don't appear, confirm Spark tasks have `S3_LOGS_BUCKET` set and look for `*.inprogress` / final event files in S3.
+
+## 17. Jenkins Pipeline Operations
+
+### 17.1 Triggering a deploy
+
+1. Open the Jenkins job for DHP and click **Build with Parameters**.
+2. Set `DEPLOY_ACTION` = `deploy`.
+3. Select the target `ENVIRONMENT` (dev/staging/prod).
+4. Leave `IMAGE_TAG` empty (auto-generates from Git SHA) or set a specific tag.
+5. Set `AUTO_APPROVE` = false (recommended for prod) or true (for dev CI).
+6. Click **Build**.
+
+### 17.2 Running infrastructure changes
+
+```bash
+# 1. Plan first (always review before applying)
+#    Set DEPLOY_ACTION = infra-plan, ENVIRONMENT = dev
+#    Review the archived tfplan.txt artifact in Jenkins
+
+# 2. Apply (only after verifying the plan)
+#    Set DEPLOY_ACTION = infra-apply, ENVIRONMENT = dev
+#    Pipeline will show approval gate unless AUTO_APPROVE = true
+
+# 3. Destroy (tear down environment)
+#    Set DEPLOY_ACTION = infra-destroy, ENVIRONMENT = dev
+#    CAUTION: This removes all infrastructure including RDS data
+```
+
+### 17.3 Checking build status
+
+- **Console Output**: Click on the build number → Console Output for full logs.
+- **Archived Artifacts**: Terraform plan files (`tfplan.txt`, `tfdestroy.txt`) are archived per build.
+- **Blue Ocean**: Use Blue Ocean view for a visual pipeline overview.
+
+### 17.4 Troubleshooting failed Jenkins builds
+
+**Preflight failures:**
+- Check that `aws-jenkins-creds` credential exists in Jenkins.
+- Verify Terraform and AWS CLI are installed at the paths configured in `Jenkinsfile`.
+
+**Build & Push failures:**
+- Ensure Docker daemon is running on the agent.
+- Verify ECR login succeeded (check for expired credential issues).
+- Check disk space on the Jenkins agent.
+
+**Migration failures:**
+- Check the ECS task logs in CloudWatch: `/dhp/<env>/db-migrations`.
+- Verify VPC/subnet/security-group tags match what the pipeline queries.
+
+**Deploy failures:**
+- Check ECS service events: `aws ecs describe-services --cluster dhp-<env>-cluster --services dhp-<env>-<service>`.
+- Look for image pull errors, health check failures, or insufficient capacity.
+
+**Smoke test warnings:**
+- Services may still be stabilizing after deploy. Re-run health checks manually.
+- If ALB DNS cannot be resolved, verify the ALB name matches `dhp-<env>-alb`.
+
+### 17.5 Jenkins credential setup
+
+Create the AWS credential in Jenkins:
+
+1. Navigate to **Manage Jenkins → Manage Credentials**.
+2. Add a new credential of type **AWS Credentials**.
+3. Set the ID to `aws-jenkins-creds`.
+4. Provide the Access Key ID and Secret Access Key for an IAM user/role with deploy permissions.
