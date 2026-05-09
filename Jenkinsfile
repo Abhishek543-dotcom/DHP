@@ -74,7 +74,7 @@ pipeline {
           $class: 'AmazonWebServicesCredentialsBinding',
           credentialsId: env.AWS_CREDS_ID
         ]]) {
-          sh '''
+          sh """
             set -euo pipefail
 
             test -x "${TERRAFORM_BIN}" || { echo "Terraform not found at ${TERRAFORM_BIN}"; exit 1; }
@@ -84,14 +84,25 @@ pipeline {
             "${TERRAFORM_BIN}" version
             "${AWS_BIN}" --version
             python3 --version
-            docker --version
+
+            # Docker is only required for build/deploy actions
+            if echo "${params.DEPLOY_ACTION}" | grep -qE '^(build-only|deploy)\$'; then
+              if command -v docker >/dev/null 2>&1; then
+                docker --version
+              else
+                echo "ERROR: Docker is required for ${params.DEPLOY_ACTION} but not found in PATH."
+                exit 1
+              fi
+            else
+              echo "Docker check skipped (not required for ${params.DEPLOY_ACTION})."
+            fi
 
             echo "=== AWS Identity ==="
-            CALLER=$("${AWS_BIN}" sts get-caller-identity)
-            echo "${CALLER}"
-            ACCOUNT_ID=$(echo "${CALLER}" | python3 -c "import sys,json; print(json.load(sys.stdin)['Account'])")
-            echo "ECR_REGISTRY=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com" > ecr_env.txt
-          '''
+            CALLER=\$("${AWS_BIN}" sts get-caller-identity)
+            echo "\${CALLER}"
+            ACCOUNT_ID=\$(echo "\${CALLER}" | python3 -c "import sys,json; print(json.load(sys.stdin)['Account'])")
+            echo "ECR_REGISTRY=\${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com" > ecr_env.txt
+          """
           script {
             def ecrEnv = readFile('ecr_env.txt').trim()
             env.ECR_REGISTRY = ecrEnv.split('=')[1]
