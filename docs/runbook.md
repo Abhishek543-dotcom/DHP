@@ -48,6 +48,8 @@ curl -s http://localhost:8001/health/ready
 curl -s http://localhost:8002/health
 curl -s http://localhost:8003/health
 curl -s http://localhost:8004/health
+curl -s http://localhost:8005/health        # lineage-service
+curl -s http://localhost:8005/health/ready
 ```
 
 ### 3.2 Infra Health
@@ -66,6 +68,13 @@ curl -s http://localhost:8001/metrics | head
 curl -s http://localhost:8002/metrics | head
 curl -s http://localhost:8003/metrics | head
 curl -s http://localhost:8004/metrics | head
+curl -s http://localhost:8005/metrics | head      # lineage-service
+curl -s http://localhost:9000/metrics | head      # orchestrator (aiohttp)
+
+# Spot-check DHP business metrics
+curl -s http://localhost:8001/metrics | rg '^dhp_jobs_'
+curl -s http://localhost:8002/metrics | rg '^dhp_catalog_'
+curl -s http://localhost:9000/metrics | rg '^dhp_orchestrator_|^dhp_ecs_runtask_'
 ```
 
 ## 4. Authentication Setup
@@ -352,3 +361,159 @@ make k8s-delete
 - Local compose includes Prometheus and blackbox exporter.
 - Grafana provisions datasources and dashboard on startup.
 - The Spark image tag is expected to match `SPARK_IMAGE` in orchestrator config.
+
+## 13. Scheduled Jobs
+
+### 13.1 Create a schedule
+
+```bash
+curl -s -X POST http://localhost:8001/api/v1/schedules/ \
+  -H "X-API-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "nightly_etl",
+    "cron_expression": "0 2 * * *",
+    "timezone": "America/New_York",
+    "job_template": {
+      "job_name": "nightly_sales_rollup",
+      "job_type": "spark_etl",
+      "entrypoint": "s3://lakehouse-scripts/etl/sales_transform.py",
+      "submitted_by": "scheduler"
+    }
+  }'
+```
+
+### 13.2 List, trigger, disable
+
+```bash
+curl -s -H "X-API-Key: ${API_KEY}" http://localhost:8001/api/v1/schedules/ | jq .
+curl -s -X POST -H "X-API-Key: ${API_KEY}" \
+  http://localhost:8001/api/v1/schedules/<id>/trigger
+curl -s -X PUT -H "X-API-Key: ${API_KEY}" -H "Content-Type: application/json" \
+  -d '{"enabled": false}' http://localhost:8001/api/v1/schedules/<id>
+```
+
+### 13.3 Verify scheduler tick
+
+```bash
+docker logs lakehouse-orchestrator --tail 200 | rg -n "scheduler|advisory_lock|schedule_id"
+```
+
+If multiple orchestrator replicas are running, only one fires per tick (advisory lock `0x4448505F5343484C`).
+
+## 14. Lineage
+
+### 14.1 Manually post an OpenLineage event
+
+```bash
+curl -s -X POST http://localhost:8005/api/v1/lineage \
+  -H "X-API-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "eventType": "COMPLETE",
+    "eventTime": "2026-05-07T01:23:45Z",
+    "run":  {"runId": "11111111-1111-1111-1111-111111111111"},
+    "job":  {"namespace": "dhp", "name": "sample_etl"},
+    "inputs":  [{"namespace":"s3://lakehouse-raw","name":"sales/2026-05-06"}],
+    "outputs": [{"namespace":"s3://lakehouse-warehouse","name":"sales_db.transactions"}]
+  }'
+```
+
+### 14.2 Walk the graph
+
+```bash
+curl -s -H "X-API-Key: ${API_KEY}" \
+  "http://localhost:8005/api/v1/datasets/s3:%2F%2Flakehouse-warehouse/sales_db.transactions/upstream" | jq .
+curl -s -H "X-API-Key: ${API_KEY}" \
+  "http://localhost:8005/api/v1/datasets/s3:%2F%2Flakehouse-raw/sales/2026-05-06/downstream" | jq .
+```
+
+## 15. Iceberg + Glue
+
+### 15.1 Backfill catalog rows to Glue
+
+```bash
+curl -s -X POST -H "X-API-Key: ${API_KEY}" \
+  http://localhost:8002/api/v1/databases/sales_db/sync-glue
+```
+
+### 15.2 Verify on AWS
+
+```bash
+aws glue get-tables --database-name dhp_dev | jq '.TableList[] | .Name'
+```
+
+### 15.3 Disable Glue locally
+
+Leave `GLUE_CATALOG_DATABASE` unset. `GlueCatalogClient.enabled` returns False and all writes increment `dhp_catalog_glue_sync_total{outcome="skipped"}` without contacting AWS.
+
+## 16. Spark History Server
+
+- Local: not provisioned in docker-compose (uses live Spark UI from the running container).
+- AWS: navigate to `https://<alb_dns>/spark-history/` once the ECS service is healthy. The service tails `s3://<logs-bucket>/spark-events/`. Health check: `GET /spark-history/api/v1/applications`.
+- If apps don't appear, confirm Spark tasks have `S3_LOGS_BUCKET` set and look for `*.inprogress` / final event files in S3.
+
+## 17. Jenkins Pipeline Operations
+
+### 17.1 Triggering a deploy
+
+1. Open the Jenkins job for DHP and click **Build with Parameters**.
+2. Set `DEPLOY_ACTION` = `deploy`.
+3. Select the target `ENVIRONMENT` (dev/staging/prod).
+4. Leave `IMAGE_TAG` empty (auto-generates from Git SHA) or set a specific tag.
+5. Set `AUTO_APPROVE` = false (recommended for prod) or true (for dev CI).
+6. Click **Build**.
+
+### 17.2 Running infrastructure changes
+
+```bash
+# 1. Plan first (always review before applying)
+#    Set DEPLOY_ACTION = infra-plan, ENVIRONMENT = dev
+#    Review the archived tfplan.txt artifact in Jenkins
+
+# 2. Apply (only after verifying the plan)
+#    Set DEPLOY_ACTION = infra-apply, ENVIRONMENT = dev
+#    Pipeline will show approval gate unless AUTO_APPROVE = true
+
+# 3. Destroy (tear down environment)
+#    Set DEPLOY_ACTION = infra-destroy, ENVIRONMENT = dev
+#    CAUTION: This removes all infrastructure including RDS data
+```
+
+### 17.3 Checking build status
+
+- **Console Output**: Click on the build number → Console Output for full logs.
+- **Archived Artifacts**: Terraform plan files (`tfplan.txt`, `tfdestroy.txt`) are archived per build.
+- **Blue Ocean**: Use Blue Ocean view for a visual pipeline overview.
+
+### 17.4 Troubleshooting failed Jenkins builds
+
+**Preflight failures:**
+- Check that `aws-jenkins-creds` credential exists in Jenkins.
+- Verify Terraform and AWS CLI are installed at the paths configured in `Jenkinsfile`.
+
+**Build & Push failures:**
+- Ensure Docker daemon is running on the agent.
+- Verify ECR login succeeded (check for expired credential issues).
+- Check disk space on the Jenkins agent.
+
+**Migration failures:**
+- Check the ECS task logs in CloudWatch: `/dhp/<env>/db-migrations`.
+- Verify VPC/subnet/security-group tags match what the pipeline queries.
+
+**Deploy failures:**
+- Check ECS service events: `aws ecs describe-services --cluster dhp-<env>-cluster --services dhp-<env>-<service>`.
+- Look for image pull errors, health check failures, or insufficient capacity.
+
+**Smoke test warnings:**
+- Services may still be stabilizing after deploy. Re-run health checks manually.
+- If ALB DNS cannot be resolved, verify the ALB name matches `dhp-<env>-alb`.
+
+### 17.5 Jenkins credential setup
+
+Create the AWS credential in Jenkins:
+
+1. Navigate to **Manage Jenkins → Manage Credentials**.
+2. Add a new credential of type **AWS Credentials**.
+3. Set the ID to `aws-jenkins-creds`.
+4. Provide the Access Key ID and Secret Access Key for an IAM user/role with deploy permissions.

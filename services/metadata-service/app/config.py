@@ -25,6 +25,15 @@ class Settings(BaseSettings):
     s3_secret_key: str = "dev-secret-key-change-me"
     s3_warehouse_bucket: str = "lakehouse-warehouse"
 
+    # AWS Glue Data Catalog (Iceberg integration). When empty (local /
+    # docker-compose), Glue write-through is skipped and DHP-internal Postgres
+    # remains the sole source of truth.
+    glue_catalog_database: str = ""
+    aws_region: str = "us-east-1"
+
+    # Redis (rate limiting)
+    redis_url: str = "redis://localhost:6379"
+
     @field_validator("debug", mode="before")
     @classmethod
     def normalize_debug(cls, value):

@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.config import get_settings
+from app.metrics import STORAGE_BUCKET_OPS_TOTAL, STORAGE_PRESIGNED_URLS_TOTAL
 from app.models import (
     BucketCreateRequest,
     BucketResponse,
@@ -31,8 +32,10 @@ async def create_bucket(
     """Create a new storage bucket."""
     try:
         result = s3.create_bucket(request.name)
+        STORAGE_BUCKET_OPS_TOTAL.labels(op="create", outcome="success").inc()
         return BucketResponse(name=request.name, status=result["status"])
     except Exception as e:
+        STORAGE_BUCKET_OPS_TOTAL.labels(op="create", outcome="error").inc()
         raise HTTPException(status_code=500, detail=f"Failed to create bucket: {str(e)}")
 
 
@@ -42,6 +45,7 @@ async def list_buckets(
 ):
     """List all storage buckets."""
     buckets = s3.list_buckets()
+    STORAGE_BUCKET_OPS_TOTAL.labels(op="list", outcome="success").inc()
     return BucketListResponse(total=len(buckets), buckets=buckets)
 
 
@@ -61,7 +65,9 @@ async def list_objects(
         continuation_token=continuation_token,
     )
     if result is None:
+        STORAGE_BUCKET_OPS_TOTAL.labels(op="list_objects", outcome="not_found").inc()
         raise HTTPException(status_code=404, detail=f"Bucket '{bucket_name}' not found")
+    STORAGE_BUCKET_OPS_TOTAL.labels(op="list_objects", outcome="success").inc()
     return ObjectListResponse(**result)
 
 
@@ -80,6 +86,7 @@ async def get_presigned_url(
             operation=request.operation,
             expiry=expiry,
         )
+        STORAGE_PRESIGNED_URLS_TOTAL.labels(operation=request.operation).inc()
         return PresignedUrlResponse(
             bucket=bucket_name,
             object_key=request.object_key,
@@ -100,5 +107,7 @@ async def delete_object(
     """Delete an object from a bucket."""
     success = s3.delete_object(bucket_name, object_key)
     if not success:
+        STORAGE_BUCKET_OPS_TOTAL.labels(op="delete_object", outcome="error").inc()
         raise HTTPException(status_code=500, detail="Failed to delete object")
+    STORAGE_BUCKET_OPS_TOTAL.labels(op="delete_object", outcome="success").inc()
 

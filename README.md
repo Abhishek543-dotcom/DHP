@@ -3,10 +3,14 @@
 DataHarbour Project (DHP) is an API-first data platform for running Spark jobs with strong operational controls:
 
 - Job submission, cancellation, status tracking, and retries
+- Cron-based job scheduling with timezone support
 - Metadata catalog for databases and tables (schema evolution included)
+- Optional Iceberg + AWS Glue catalog write-through for external readers
 - Object storage management for S3/MinIO
-- Centralized logs and metrics with Grafana dashboards
-- Kubernetes-backed isolated Spark runtime per job
+- Centralized logs and metrics with Grafana dashboards, plus custom DHP business metrics
+- OpenLineage event ingestion + dataset graph traversal (upstream/downstream)
+- Spark History Server for completed application UIs
+- Kubernetes-backed isolated Spark runtime per job (local) or ECS Fargate (AWS)
 
 This repository is optimized for local development while preserving production-like patterns (event-driven orchestration, health probes, observability, and service separation).
 
@@ -18,7 +22,9 @@ This repository is optimized for local development while preserving production-l
 | Metadata Service | 8002 | Manage databases, tables, schema, snapshots |
 | Log Service | 8003 | Retrieve/stream job logs from Loki |
 | Storage Service | 8004 | Manage buckets, objects, presigned URLs |
-| Orchestrator | N/A | Consumes Kafka events and creates K8s Spark Jobs |
+| Lineage Service | 8005 | OpenLineage ingestion + dataset graph traversal |
+| Orchestrator | 9000 (metrics) | Consumes Kafka events, fires schedules, launches Spark tasks |
+| Spark History Server | 18080 | UI for completed Spark applications (`/spark-history`) |
 | Grafana | 3000 | Dashboards and platform observability |
 | Prometheus | 9090 | Metrics scraping and probing |
 | Loki | 3100 | Log storage and query backend |
@@ -36,6 +42,8 @@ This repository is optimized for local development while preserving production-l
 4. Spark container reports `RUNNING` and final status (`SUCCESS` or `FAILED`) to Job Service via internal callback.
 5. Failed jobs are retried until `max_retries`; terminal failures become `DEAD`.
 6. Logs are shipped to Loki and retrieved via Job Service or Log Service APIs.
+7. Spark applications emit OpenLineage events to Lineage Service and write event logs to S3 for the History Server.
+8. Scheduled jobs are materialized by the orchestrator's leader-elected scheduler tick (Postgres advisory lock) and re-enter the same Kafka path as ad-hoc submissions.
 
 ## Prerequisites
 
@@ -46,11 +54,13 @@ This repository is optimized for local development while preserving production-l
 
 ## Quick Start
 
+### Local development (docker-compose)
+
 ```bash
 cp .env.example .env
 
 # Required for Spark runtime jobs created by orchestrator
-kubectl cluster-info
+kubectl cluster-info  # local-only path; AWS deploy uses ECS RunTask instead
 
 # Build Spark runtime image used by orchestrator (required once, or after changes)
 make build-spark
@@ -58,6 +68,18 @@ make build-spark
 # Start full local stack
 make up
 ```
+
+### AWS deployment
+
+DHP can be deployed onto AWS ECS Fargate using the Terraform stack in
+`infra/terraform/`. Two CI/CD paths are available:
+
+- **GitHub Actions** (`.github/workflows/deploy.yml`) — OIDC-based, triggers on push to `main` or manual dispatch.
+- **Jenkins** (`Jenkinsfile`) — Credential-based, supports `build-only`, `deploy`, `infra-plan`, `infra-apply`, and `infra-destroy` actions via parameterized pipeline.
+
+The orchestrator launches Spark jobs via `ecs:RunTask` instead of Kubernetes when running on AWS.
+
+See [`docs/aws-deployment.md`](docs/aws-deployment.md) for the full guide (covers both CI/CD paths).
 
 After startup:
 
@@ -92,6 +114,12 @@ Defaults come from `.env`:
 - `DELETE /api/v1/jobs/{job_id}`
 - `PUT /api/v1/jobs/{job_id}/status` (internal)
 - `GET /api/v1/jobs/{job_id}/logs`
+- `POST /api/v1/schedules/`
+- `GET /api/v1/schedules/`
+- `GET /api/v1/schedules/{schedule_id}`
+- `PUT /api/v1/schedules/{schedule_id}`
+- `DELETE /api/v1/schedules/{schedule_id}`
+- `POST /api/v1/schedules/{schedule_id}/trigger`
 
 ### Metadata Service (`http://localhost:8002`)
 
@@ -106,6 +134,7 @@ Defaults come from `.env`:
 - `PUT /api/v1/databases/{db_name}/tables/{table_name}`
 - `DELETE /api/v1/databases/{db_name}/tables/{table_name}`
 - `GET /api/v1/databases/{db_name}/tables/{table_name}/snapshots`
+- `POST /api/v1/databases/{db_name}/sync-glue` (backfill catalog rows to AWS Glue)
 
 ### Log Service (`http://localhost:8003`)
 
@@ -121,6 +150,16 @@ Defaults come from `.env`:
 - `GET /api/v1/storage/buckets/{bucket_name}/objects`
 - `POST /api/v1/storage/buckets/{bucket_name}/presigned-url`
 - `DELETE /api/v1/storage/buckets/{bucket_name}/objects/{object_key}`
+
+### Lineage Service (`http://localhost:8005`)
+
+- `GET /health`
+- `GET /health/ready`
+- `POST /api/v1/lineage` (OpenLineage event ingestion)
+- `GET /api/v1/jobs/{namespace}/{name}/runs`
+- `GET /api/v1/datasets/{namespace}/{name}`
+- `GET /api/v1/datasets/{namespace}/{name}/upstream`
+- `GET /api/v1/datasets/{namespace}/{name}/downstream`
 
 ## Spark Jobs in This Repo
 
@@ -152,6 +191,17 @@ The dashboard includes:
 - Job API activity and log volume panels
 - Recent error logs from Loki
 
+### Custom DHP business metrics
+
+In addition to standard FastAPI HTTP metrics, services expose Prometheus counters/gauges/histograms:
+
+- Job Service: `dhp_jobs_submitted_total`, `dhp_jobs_queued_total`, `dhp_jobs_failed_total{reason}`, `dhp_jobs_completed_total`, `dhp_jobs_active`, `dhp_job_submission_seconds`, `dhp_job_retries_total`
+- Storage Service: `dhp_storage_presigned_urls_total{operation}`, `dhp_storage_bucket_ops_total{op,outcome}`
+- Log Service: `dhp_log_queries_total{source,outcome}`, `dhp_loki_errors_total`, `dhp_log_query_seconds`
+- Metadata Service: `dhp_catalog_writes_total{entity,op,outcome}`, `dhp_catalog_databases`, `dhp_catalog_tables`, `dhp_catalog_glue_sync_total{op,outcome}`
+- Lineage Service: `dhp_lineage_events_total{event_type,outcome}`, `dhp_lineage_graph_queries_total{direction,outcome}`, `dhp_lineage_ingest_seconds`
+- Orchestrator (aiohttp `:9000/metrics`): `dhp_orchestrator_launches_total{outcome}`, `dhp_orchestrator_retries_total`, `dhp_orchestrator_dlq_total`, `dhp_ecs_runtask_seconds`, `dhp_orchestrator_cancellations_total{outcome}`
+
 ## Postman Assets
 
 Importable artifacts are under `docs/postman/`:
@@ -179,12 +229,19 @@ make db-reset
 
 ```text
 .
+├── Jenkinsfile                 # Jenkins CI/CD pipeline (deploy + infra)
+├── .github/workflows/          # GitHub Actions CI/CD
+│   ├── ci.yml
+│   └── deploy.yml
 ├── docs/
 │   ├── architecture.md
+│   ├── aws-deployment.md
+│   ├── disaster-recovery.md
 │   ├── runbook.md
 │   └── postman/
 ├── infra/
 │   ├── docker-compose.dev.yaml
+│   ├── terraform/              # AWS infrastructure (ECS, RDS, MSK, ALB, etc.)
 │   ├── prometheus/
 │   ├── grafana/
 │   └── k8s/
@@ -193,16 +250,22 @@ make db-reset
 │   ├── metadata-service/
 │   ├── log-service/
 │   ├── storage-service/
+│   ├── lineage-service/
 │   └── orchestrator/
 ├── spark-images/
 │   ├── base/
+│   ├── spark-history/
 │   └── jobs/
+├── blackbook/                  # Static HTML project documentation
+├── db/                         # Alembic database migrations
 └── scripts/
 ```
 
 ## Additional Documentation
 
 - Architecture details: `docs/architecture.md`
+- AWS deployment guide: `docs/aws-deployment.md`
+- Disaster recovery: `docs/disaster-recovery.md`
 - Operations runbook: `docs/runbook.md`
 - Contributing guide: `CONTRIBUTING.md`
 - Security policy: `SECURITY.md`

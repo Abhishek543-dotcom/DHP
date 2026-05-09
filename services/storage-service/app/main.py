@@ -3,20 +3,21 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 try:
     from prometheus_fastapi_instrumentator import Instrumentator
 except ModuleNotFoundError:  # pragma: no cover - fallback for minimal test envs
     Instrumentator = None
 
 from app.config import get_settings
-from app.routers import storage
+from app.logging_config import RequestIDMiddleware, configure_logging
+from app.rate_limit import limiter, rate_limit_exceeded_handler
+from app.routers import health, storage
 
 settings = get_settings()
 
-logging.basicConfig(
-    level=logging.DEBUG if settings.debug else logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+configure_logging(service="storage-service", level="DEBUG" if settings.debug else "INFO")
 logger = logging.getLogger(__name__)
 
 
@@ -49,12 +50,18 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-API-Key"],
 )
+app.add_middleware(RequestIDMiddleware)
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 if Instrumentator is not None:
     Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 else:
     logger.warning("prometheus_fastapi_instrumentator not installed; /metrics disabled")
 
+app.include_router(health.router)
 app.include_router(storage.router)
 
 
@@ -67,7 +74,5 @@ async def root():
     }
 
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "service": "storage-service"}
+
 

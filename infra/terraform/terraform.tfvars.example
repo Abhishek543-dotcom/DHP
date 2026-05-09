@@ -1,0 +1,36 @@
+aws_region  = "us-east-1"
+environment = "dev"
+name_prefix = "dhp"
+
+# Networking
+vpc_cidr = "10.40.0.0/16"
+az_count = 2
+
+# RDS - dev sizing
+db_instance_class    = "db.t4g.medium"
+db_allocated_storage = 20
+db_multi_az          = false
+
+# MSK Serverless has no broker count; var below is for future provisioned switch.
+msk_kafka_version        = "3.6.0"
+msk_broker_instance_type = "kafka.t3.small"
+msk_broker_count         = 2
+
+redis_node_type = "cache.t4g.micro"
+
+# Service sizing
+service_cpu           = 512
+service_memory        = 1024
+service_desired_count = 2
+
+spark_task_cpu    = 2048
+spark_task_memory = 8192
+
+# Image tag - CI overrides on deploy
+image_tag = "latest"
+
+# Set to your ACM cert ARN to enable HTTPS. Leave empty for HTTP-only dev.
+acm_certificate_arn = ""
+
+# Restrict to your IP ranges in prod.
+alb_allowed_cidrs = ["0.0.0.0/0"]

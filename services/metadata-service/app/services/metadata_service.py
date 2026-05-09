@@ -8,6 +8,12 @@ from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.db.models import CatalogDatabase, CatalogTable, TableSnapshot, SchemaHistory
+from app.glue_client import get_glue_client
+from app.metrics import (
+    CATALOG_DATABASES,
+    CATALOG_TABLES,
+    CATALOG_WRITES_TOTAL,
+)
 from app.models import (
     DatabaseCreateRequest,
     DatabaseResponse,
@@ -50,6 +56,8 @@ class MetadataService:
         self.db.add(db_record)
         await self.db.flush()
 
+        CATALOG_WRITES_TOTAL.labels(entity="database", op="create", outcome="success").inc()
+        CATALOG_DATABASES.inc()
         logger.info(f"Created database: {request.db_name} at {location}")
 
         return DatabaseResponse(
@@ -132,6 +140,8 @@ class MetadataService:
 
         await self.db.delete(db_record)
         await self.db.flush()
+        CATALOG_WRITES_TOTAL.labels(entity="database", op="drop", outcome="success").inc()
+        CATALOG_DATABASES.dec()
         logger.info(f"Dropped database: {db_name}")
         return True
 
@@ -192,7 +202,23 @@ class MetadataService:
         self.db.add(schema_record)
         await self.db.flush()
 
+        CATALOG_WRITES_TOTAL.labels(entity="table", op="create", outcome="success").inc()
+        CATALOG_TABLES.inc()
         logger.info(f"Created table: {db_name}.{request.table_name} at {location}")
+
+        # Write-through to AWS Glue Data Catalog (Iceberg marker entry).
+        # No-op when GLUE_CATALOG_DATABASE is unset; failures don't roll back
+        # the DHP catalog write.
+        try:
+            get_glue_client().register_table(
+                table_name=f"{db_name}__{request.table_name}",
+                location=location,
+            )
+        except Exception:
+            logger.exception(
+                "Unexpected error during Glue write-through for %s.%s",
+                db_name, request.table_name,
+            )
 
         return TableResponse(
             table_id=str(table_record.table_id),
@@ -347,6 +373,7 @@ class MetadataService:
             self.db.add(schema_record)
 
         await self.db.flush()
+        CATALOG_WRITES_TOTAL.labels(entity="table", op="update", outcome="success").inc()
         logger.info(f"Updated table: {db_name}.{table_name} - {'; '.join(changes)}")
 
         return await self.get_table(db_name, table_name)
@@ -365,7 +392,15 @@ class MetadataService:
 
         await self.db.delete(table_record)
         await self.db.flush()
+        CATALOG_WRITES_TOTAL.labels(entity="table", op="drop", outcome="success").inc()
+        CATALOG_TABLES.dec()
         logger.info(f"Dropped table: {db_name}.{table_name}")
+
+        try:
+            get_glue_client().drop_table(table_name=f"{db_name}__{table_name}")
+        except Exception:
+            logger.exception("Unexpected error dropping Glue entry %s.%s", db_name, table_name)
+
         return True
 
     # ============================================

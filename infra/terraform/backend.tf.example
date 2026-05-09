@@ -1,0 +1,12 @@
+# Copy to backend.tf and fill in your bucket / DynamoDB lock table.
+# Skip for first-time bootstrap; you can `terraform init -migrate-state` later.
+
+terraform {
+  backend "s3" {
+    bucket         = "REPLACE_ME-dhp-tfstate"
+    key            = "dhp/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "REPLACE_ME-dhp-tflock"
+    encrypt        = true
+  }
+}

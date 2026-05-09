@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sse_starlette.sse import EventSourceResponse
 
 from app.loki_client import LokiClient, get_loki_client
+from app.metrics import LOG_QUERIES_TOTAL, LOG_QUERY_SECONDS, LOKI_ERRORS_TOTAL
 from app.security import require_api_key
 
 logger = logging.getLogger(__name__)
@@ -28,8 +29,15 @@ async def get_job_logs(
 
     Queries Grafana Loki using the job_id label for log isolation.
     """
-    logs = await loki.query_logs(job_id=job_id, source=source, tail=tail)
+    with LOG_QUERY_SECONDS.time():
+        try:
+            logs = await loki.query_logs(job_id=job_id, source=source, tail=tail)
+        except Exception:
+            LOKI_ERRORS_TOTAL.inc()
+            LOG_QUERIES_TOTAL.labels(source="range", outcome="error").inc()
+            raise
 
+    LOG_QUERIES_TOTAL.labels(source="range", outcome="success").inc()
     return {
         "job_id": job_id,
         "source": source,
@@ -52,10 +60,15 @@ async def stream_job_logs(
 
     async def event_generator():
         last_timestamp = None
+        LOG_QUERIES_TOTAL.labels(source="stream", outcome="started").inc()
         while True:
-            logs = await loki.query_logs(
-                job_id=job_id, source=source, tail=50
-            )
+            try:
+                logs = await loki.query_logs(
+                    job_id=job_id, source=source, tail=50
+                )
+            except Exception:
+                LOKI_ERRORS_TOTAL.inc()
+                raise
 
             for log in logs:
                 if last_timestamp is None or log["timestamp"] > last_timestamp:
