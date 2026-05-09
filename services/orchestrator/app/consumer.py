@@ -1,42 +1,72 @@
 """
-Kafka consumer that processes job submission events and launches Spark containers.
+Kafka consumer that processes job submission events and launches Spark
+tasks on AWS ECS Fargate.
+
+On terminal failure (retry budget exhausted), the original event is forwarded
+to the DLQ topic via ``DLQProducer`` so it can be inspected and replayed.
 """
-import json
+from __future__ import annotations
+
 import asyncio
+import json
 import logging
 
 import httpx
 from aiokafka import AIOKafkaConsumer
 
 from app.config import get_settings
-from app.k8s_manager import K8sJobManager
+from app.dlq_producer import DLQProducer
+from app.ecs_manager import ECSJobManager
+from app.metrics import (
+    ECS_RUNTASK_SECONDS,
+    ORCHESTRATOR_CANCELLATIONS_TOTAL,
+    ORCHESTRATOR_DLQ_TOTAL,
+    ORCHESTRATOR_LAUNCHES_TOTAL,
+    ORCHESTRATOR_RETRIES_TOTAL,
+)
+from app.msk_auth import kafka_client_kwargs
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-class JobConsumer:
-    """Consumes job events from Kafka and delegates to K8s."""
+def _build_consumer(*, topic: str, group: str, offset_reset: str) -> AIOKafkaConsumer:
+    kwargs = kafka_client_kwargs(
+        brokers=settings.kafka_brokers,
+        region=settings.aws_region,
+        use_iam=settings.msk_use_iam,
+    )
+    return AIOKafkaConsumer(
+        topic,
+        group_id=group,
+        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+        auto_offset_reset=offset_reset,
+        enable_auto_commit=True,
+        **kwargs,
+    )
 
-    def __init__(self):
-        self.k8s_manager = K8sJobManager()
+
+class JobConsumer:
+    """Consumes job events from Kafka and launches ECS Spark tasks."""
+
+    def __init__(self, ecs_manager: ECSJobManager, dlq: DLQProducer | None = None):
+        self.ecs_manager = ecs_manager
+        self.dlq = dlq or DLQProducer()
         self.http_client = httpx.AsyncClient(timeout=30.0)
         self.consumer: AIOKafkaConsumer | None = None
 
-    async def start(self):
-        """Start the Kafka consumer loop."""
-        self.consumer = AIOKafkaConsumer(
-            settings.kafka_job_topic,
-            bootstrap_servers=settings.kafka_brokers,
-            group_id=settings.kafka_consumer_group,
-            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-            auto_offset_reset="earliest",
-            enable_auto_commit=True,
+    async def start(self) -> None:
+        self.consumer = _build_consumer(
+            topic=settings.kafka_job_topic,
+            group=settings.kafka_consumer_group,
+            offset_reset="earliest",
         )
-
         await self.consumer.start()
+        await self.dlq.start()
         logger.info(
-            f"Orchestrator consumer started — listening on '{settings.kafka_job_topic}'"
+            "Orchestrator consumer started topic=%s group=%s",
+            settings.kafka_job_topic,
+            settings.kafka_consumer_group,
         )
 
         try:
@@ -46,60 +76,72 @@ class JobConsumer:
             logger.info("Consumer loop cancelled")
         finally:
             await self.consumer.stop()
+            await self.dlq.stop()
             await self.http_client.aclose()
-            logger.info("Consumer stopped")
 
-    async def _process_message(self, message):
-        """Process a single job event from Kafka."""
+    async def _process_message(self, message) -> None:
         job_event = message.value
         job_id = job_event.get("job_id", "unknown")
+        max_retries = int(job_event.get("max_retries", settings.default_max_retries))
 
-        logger.info(f"Processing job event: job_id={job_id}")
+        last_error: Exception | None = None
+        # Attempts are 1-indexed for log clarity. On AWS the ECS-side retry
+        # is what handles per-attempt restarts; this loop guards against
+        # transient `RunTask` API errors (throttling, network blips).
+        for attempt in range(1, max_retries + 1):
+            try:
+                await self._update_job_status(job_id, status="PROVISIONING")
+                # Launch is sync (boto3) — run in thread to avoid blocking event loop.
+                with ECS_RUNTASK_SECONDS.time():
+                    task_arn = await asyncio.to_thread(
+                        self.ecs_manager.create_spark_job, job_event
+                    )
+                await self._update_job_status(
+                    job_id, status="PROVISIONING", container_id=task_arn
+                )
+                ORCHESTRATOR_LAUNCHES_TOTAL.labels(outcome="success").inc()
+                logger.info(
+                    "Launched task arn=%s job_id=%s attempt=%d", task_arn, job_id, attempt
+                )
+                return
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                ORCHESTRATOR_LAUNCHES_TOTAL.labels(outcome="retry").inc()
+                logger.warning(
+                    "Launch failed job_id=%s attempt=%d/%d error=%s",
+                    job_id, attempt, max_retries, exc,
+                )
+                # Backoff before retry; skip after final attempt.
+                if attempt < max_retries:
+                    ORCHESTRATOR_RETRIES_TOTAL.inc()
+                    await asyncio.sleep(min(2 ** attempt, 30))
 
-        try:
-            # Update job status to PROVISIONING
-            await self._update_job_status(
-                job_id, status="PROVISIONING"
-            )
-
-            # Launch Spark container on K8s
-            container_id = self.k8s_manager.create_spark_job(job_event)
-
-            # Keep the job in PROVISIONING until the Spark container
-            # explicitly reports RUNNING from inside the runtime.
-            await self._update_job_status(
-                job_id,
-                status="PROVISIONING",
-                container_id=container_id,
-            )
-
-            logger.info(
-                f"[OK] Launched container '{container_id}' for job {job_id}"
-            )
-
-        except Exception as e:
-            logger.error(f"[ERROR] Failed to launch job {job_id}: {e}")
-            await self._update_job_status(
-                job_id,
-                status="FAILED",
-                error_message=f"Container launch failed: {str(e)}",
-            )
+        # Retry budget exhausted — terminal failure.
+        err_msg = f"Task launch failed after {max_retries} attempts: {last_error}"
+        logger.exception("DLQ-bound: %s", err_msg)
+        ORCHESTRATOR_LAUNCHES_TOTAL.labels(outcome="dlq").inc()
+        ORCHESTRATOR_DLQ_TOTAL.inc()
+        await self._update_job_status(job_id, status="FAILED", error_message=err_msg)
+        await self.dlq.publish(
+            original_event=job_event,
+            error=err_msg,
+            attempts=max_retries,
+        )
 
     async def _update_job_status(
         self,
         job_id: str,
+        *,
         status: str,
-        container_id: str = None,
-        error_message: str = None,
-    ):
-        """Call back to Job Service to update job status."""
+        container_id: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
         url = f"{settings.job_service_url}/api/v1/jobs/{job_id}/status"
-        payload = {"status": status}
+        payload: dict = {"status": status}
         if container_id:
             payload["container_id"] = container_id
         if error_message:
             payload["error_message"] = error_message
-
         try:
             response = await self.http_client.put(
                 url,
@@ -107,31 +149,23 @@ class JobConsumer:
                 headers={"X-Internal-Token": settings.internal_api_token},
             )
             response.raise_for_status()
-            logger.info(f"Updated job {job_id} status to {status}")
-        except Exception as e:
-            logger.error(
-                f"Failed to update job {job_id} status to {status}: {e}"
-            )
+        except Exception:
+            logger.exception("Failed to update job %s status to %s", job_id, status)
 
 
 class CancellationConsumer:
-    """Consumes job cancellation events and kills K8s jobs."""
+    """Consumes cancellation events and stops the corresponding ECS tasks."""
 
-    def __init__(self, k8s_manager: K8sJobManager):
-        self.k8s_manager = k8s_manager
+    def __init__(self, ecs_manager: ECSJobManager):
+        self.ecs_manager = ecs_manager
         self.consumer: AIOKafkaConsumer | None = None
 
-    async def start(self):
-        """Listen for cancellation events on the status topic."""
-        self.consumer = AIOKafkaConsumer(
-            settings.kafka_job_topic.replace("submissions", "status"),
-            bootstrap_servers=settings.kafka_brokers,
-            group_id=f"{settings.kafka_consumer_group}-cancellation",
-            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-            auto_offset_reset="latest",
-            enable_auto_commit=True,
+    async def start(self) -> None:
+        self.consumer = _build_consumer(
+            topic=settings.kafka_job_topic.replace("submissions", "status"),
+            group=f"{settings.kafka_consumer_group}-cancellation",
+            offset_reset="latest",
         )
-
         await self.consumer.start()
         logger.info("Cancellation consumer started")
 
@@ -140,13 +174,16 @@ class CancellationConsumer:
                 event = message.value
                 if event.get("action") == "cancel":
                     job_id = event.get("job_id")
-                    logger.info(f"Cancelling job: {job_id}")
+                    logger.info("Cancelling job: %s", job_id)
                     try:
-                        self.k8s_manager.delete_spark_job(job_id)
-                    except Exception as e:
-                        logger.error(f"Failed to cancel job {job_id}: {e}")
+                        await asyncio.to_thread(
+                            self.ecs_manager.delete_spark_job, job_id
+                        )
+                        ORCHESTRATOR_CANCELLATIONS_TOTAL.labels(outcome="success").inc()
+                    except Exception:
+                        ORCHESTRATOR_CANCELLATIONS_TOTAL.labels(outcome="error").inc()
+                        logger.exception("Failed to cancel job %s", job_id)
         except asyncio.CancelledError:
             pass
         finally:
             await self.consumer.stop()
-

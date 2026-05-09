@@ -1,0 +1,173 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to deploy"
+        required: false
+        default: ""
+
+# Required GitHub repo secrets/vars:
+#   AWS_ROLE_ARN  - IAM role with deploy perms; trust policy allows GitHub OIDC
+#   AWS_REGION
+#   AWS_ACCOUNT_ID
+#   ECR_REGISTRY  - <account>.dkr.ecr.<region>.amazonaws.com
+#   ECS_CLUSTER   - dhp-<env>-cluster
+# Optional:
+#   ENVIRONMENT   - dev|staging|prod (defaults to dev)
+
+permissions:
+  id-token: write   # OIDC
+  contents: read
+
+env:
+  ENVIRONMENT: ${{ vars.ENVIRONMENT || 'dev' }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+
+jobs:
+  build-and-push:
+    name: build & push (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: job-service
+            context: services/job-service
+          - image: metadata-service
+            context: services/metadata-service
+          - image: log-service
+            context: services/log-service
+          - image: storage-service
+            context: services/storage-service
+          - image: orchestrator
+            context: services/orchestrator
+          - image: spark-base
+            context: spark-images/base
+          - image: db-migrations
+            context: db
+    outputs:
+      image_tag: ${{ steps.tag.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build & push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ vars.ECR_REGISTRY }}/dhp-${{ env.ENVIRONMENT }}/${{ matrix.image }}:${{ steps.tag.outputs.value }}
+            ${{ vars.ECR_REGISTRY }}/dhp-${{ env.ENVIRONMENT }}/${{ matrix.image }}:latest
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+
+  migrate:
+    name: db migrations
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Run alembic upgrade head via ecs run-task
+        env:
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+        run: |
+          set -euo pipefail
+          # Resolve task def ARN (latest revision) and network config from CloudFormation/Terraform-tagged resources.
+          TD_ARN=$(aws ecs describe-task-definition \
+            --task-definition dhp-${ENVIRONMENT}-db-migrations \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          # Pick the first private subnet & ECS task SG by tag.
+          SUBNETS=$(aws ec2 describe-subnets \
+            --filters "Name=tag:Tier,Values=private" "Name=vpc-id,Values=$(aws ec2 describe-vpcs --filters Name=tag:Project,Values=DHP --query 'Vpcs[0].VpcId' --output text)" \
+            --query 'Subnets[*].SubnetId' --output text | tr '\t' ',')
+          SG=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=dhp-${ENVIRONMENT}-ecs-tasks" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+
+          aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --task-definition "$TD_ARN" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SG}],assignPublicIp=DISABLED}" \
+            --started-by "gha-migrations-${GITHUB_RUN_ID}" \
+            > run-task.json
+          TASK_ARN=$(jq -r '.tasks[0].taskArn' run-task.json)
+          echo "Started migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"
+          EXIT=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT" != "0" ]; then
+            echo "Migrations failed (exit=$EXIT)"; exit 1
+          fi
+
+  deploy-services:
+    name: deploy ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: [build-and-push, migrate]
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [job-service, metadata-service, log-service, storage-service, orchestrator]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Update task def with new image tag
+        id: render
+        env:
+          IMAGE: ${{ vars.ECR_REGISTRY }}/dhp-${{ env.ENVIRONMENT }}/${{ matrix.service }}:${{ needs.build-and-push.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          FAMILY="dhp-${ENVIRONMENT}-${{ matrix.service }}"
+          aws ecs describe-task-definition --task-definition "$FAMILY" \
+            --query 'taskDefinition' \
+            > td.json
+          # Drop fields the register API rejects.
+          jq 'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' td.json \
+            | jq --arg img "$IMAGE" '.containerDefinitions[0].image = $img' \
+            > td-new.json
+          NEW_ARN=$(aws ecs register-task-definition --cli-input-json file://td-new.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "task_def_arn=$NEW_ARN" >> "$GITHUB_OUTPUT"
+      - name: Update service
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+        run: |
+          aws ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "dhp-${ENVIRONMENT}-${{ matrix.service }}" \
+            --task-definition "${{ steps.render.outputs.task_def_arn }}" \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster "$CLUSTER" \
+            --services "dhp-${ENVIRONMENT}-${{ matrix.service }}"

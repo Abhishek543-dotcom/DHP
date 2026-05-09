@@ -1,9 +1,12 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.db.models import CatalogDatabase, CatalogTable
+from app.glue_client import get_glue_client
 from app.models import (
     DatabaseCreateRequest,
     DatabaseResponse,
@@ -70,4 +73,44 @@ async def drop_database(
     dropped = await svc.drop_database(db_name)
     if not dropped:
         raise HTTPException(status_code=404, detail=f"Database '{db_name}' not found")
+
+
+@router.post("/{db_name}/sync-glue")
+async def sync_glue(
+    db_name: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Backfill all tables in this DHP database into AWS Glue.
+
+    Idempotent: tables already registered in Glue produce ``outcome=exists``
+    counter increments and are skipped. Returns per-table results.
+    """
+    glue = get_glue_client()
+    if not glue.enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="Glue write-through is not configured (GLUE_CATALOG_DATABASE empty)",
+        )
+
+    db_record = (
+        await db.execute(select(CatalogDatabase).where(CatalogDatabase.db_name == db_name))
+    ).scalar_one_or_none()
+    if not db_record:
+        raise HTTPException(status_code=404, detail=f"Database '{db_name}' not found")
+
+    tables = (
+        await db.execute(select(CatalogTable).where(CatalogTable.db_id == db_record.db_id))
+    ).scalars().all()
+
+    results = []
+    for tbl in tables:
+        # register_table is fully synchronous and swallows AWS errors as
+        # warnings; we still report the attempt outcome here for the caller.
+        glue.register_table(
+            table_name=f"{db_name}__{tbl.table_name}",
+            location=tbl.location,
+        )
+        results.append({"table": tbl.table_name, "submitted": True})
+
+    return {"database": db_name, "table_count": len(results), "results": results}
 

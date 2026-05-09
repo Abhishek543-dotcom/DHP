@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     loki_url: str = "http://localhost:3100"
     loki_query_path: str = "/loki/api/v1/query_range"
 
+    # Redis (rate limiting)
+    redis_url: str = "redis://localhost:6379"
+
     @field_validator("debug", mode="before")
     @classmethod
     def normalize_debug(cls, value):

@@ -9,6 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db.models import Job
+from app.metrics import (
+    JOBS_SUBMITTED_TOTAL,
+    JOBS_QUEUED_TOTAL,
+    JOBS_FAILED_TOTAL,
+    JOBS_COMPLETED_TOTAL,
+    JOBS_ACTIVE,
+    JOB_SUBMISSION_SECONDS,
+    JOB_RETRIES_TOTAL,
+)
 from app.models.enums import JobStatus
 from app.models.job import (
     JobCreateRequest,
@@ -30,78 +39,87 @@ class JobService:
 
     async def create_job(self, request: JobCreateRequest) -> JobResponse:
         """Create a new job and enqueue it for execution."""
-        job_id = str(uuid4())
+        with JOB_SUBMISSION_SECONDS.time():
+            job_id = str(uuid4())
 
-        # Create job record in database
-        job = Job(
-            job_id=job_id,
-            job_name=request.job_name,
-            job_type=request.job_type.value,
-            status=JobStatus.PENDING.value,
-            spark_config=request.spark_config,
-            entrypoint=request.entrypoint,
-            arguments=request.arguments,
-            database_name=request.database_name,
-            table_name=request.table_name,
-            submitted_by=request.submitted_by,
-            max_retries=request.max_retries,
-        )
+            JOBS_SUBMITTED_TOTAL.labels(
+                job_type=request.job_type.value,
+                submitted_by=request.submitted_by or "unknown",
+            ).inc()
 
-        self.db.add(job)
-        await self.db.flush()
-
-        # Send job to Kafka for orchestration
-        job_event = {
-            "job_id": job_id,
-            "job_name": request.job_name,
-            "job_type": request.job_type.value,
-            "entrypoint": request.entrypoint,
-            "arguments": request.arguments,
-            "spark_config": request.spark_config,
-            "database_name": request.database_name,
-            "table_name": request.table_name,
-            "max_retries": request.max_retries,
-            "submitted_by": request.submitted_by,
-        }
-
-        queued = False
-        queue_message = "Job accepted and queued for execution"
-
-        try:
-            await send_job_event(
-                topic=settings.kafka_job_topic,
+            # Create job record in database
+            job = Job(
                 job_id=job_id,
-                event=job_event,
+                job_name=request.job_name,
+                job_type=request.job_type.value,
+                status=JobStatus.PENDING.value,
+                spark_config=request.spark_config,
+                entrypoint=request.entrypoint,
+                arguments=request.arguments,
+                database_name=request.database_name,
+                table_name=request.table_name,
+                submitted_by=request.submitted_by,
+                max_retries=request.max_retries,
             )
-            job.status = JobStatus.QUEUED.value
-            queued = True
-            await self.db.flush()
-        except Exception as e:
-            logger.error(f"Failed to enqueue job {job_id}: {e}")
-            job.status = JobStatus.PENDING.value
-            job.error_message = "Kafka enqueue failed; job is still pending"
-            queue_message = (
-                "Job accepted but not queued due to a messaging error. "
-                "Please retry once Kafka is healthy."
-            )
+
+            self.db.add(job)
             await self.db.flush()
 
-        return JobResponse(
-            job_id=job_id,
-            job_name=job.job_name,
-            job_type=job.job_type,
-            status=JobStatus(job.status),
-            spark_config=job.spark_config,
-            entrypoint=job.entrypoint,
-            arguments=job.arguments,
-            database_name=job.database_name,
-            table_name=job.table_name,
-            submitted_by=job.submitted_by,
-            submitted_at=job.submitted_at,
-            error_message=job.error_message if not queued else None,
-            max_retries=job.max_retries,
-            message=queue_message,
-        )
+            # Send job to Kafka for orchestration
+            job_event = {
+                "job_id": job_id,
+                "job_name": request.job_name,
+                "job_type": request.job_type.value,
+                "entrypoint": request.entrypoint,
+                "arguments": request.arguments,
+                "spark_config": request.spark_config,
+                "database_name": request.database_name,
+                "table_name": request.table_name,
+                "max_retries": request.max_retries,
+                "submitted_by": request.submitted_by,
+            }
+
+            queued = False
+            queue_message = "Job accepted and queued for execution"
+
+            try:
+                await send_job_event(
+                    topic=settings.kafka_job_topic,
+                    job_id=job_id,
+                    event=job_event,
+                )
+                job.status = JobStatus.QUEUED.value
+                queued = True
+                JOBS_QUEUED_TOTAL.labels(job_type=request.job_type.value).inc()
+                JOBS_ACTIVE.inc()
+                await self.db.flush()
+            except Exception as e:
+                logger.error(f"Failed to enqueue job {job_id}: {e}")
+                JOBS_FAILED_TOTAL.labels(reason="kafka_enqueue_error").inc()
+                job.status = JobStatus.PENDING.value
+                job.error_message = "Kafka enqueue failed; job is still pending"
+                queue_message = (
+                    "Job accepted but not queued due to a messaging error. "
+                    "Please retry once Kafka is healthy."
+                )
+                await self.db.flush()
+
+            return JobResponse(
+                job_id=job_id,
+                job_name=job.job_name,
+                job_type=job.job_type,
+                status=JobStatus(job.status),
+                spark_config=job.spark_config,
+                entrypoint=job.entrypoint,
+                arguments=job.arguments,
+                database_name=job.database_name,
+                table_name=job.table_name,
+                submitted_by=job.submitted_by,
+                submitted_at=job.submitted_at,
+                error_message=job.error_message if not queued else None,
+                max_retries=job.max_retries,
+                message=queue_message,
+            )
 
     async def get_job(self, job_id: str) -> Optional[JobResponse]:
         """Get a job by ID."""
@@ -213,11 +231,25 @@ class JobService:
             job.started_at = datetime.utcnow()
         elif update.status in (JobStatus.SUCCESS, JobStatus.FAILED, JobStatus.CANCELLED, JobStatus.DEAD):
             job.completed_at = datetime.utcnow()
+            JOBS_ACTIVE.dec()
+            if update.status == JobStatus.SUCCESS:
+                JOBS_COMPLETED_TOTAL.labels(job_type=job.job_type).inc()
+            elif update.status == JobStatus.DEAD:
+                JOBS_FAILED_TOTAL.labels(reason="max_retries_exceeded").inc()
+            elif update.status == JobStatus.FAILED:
+                # NOTE: only counts as failed when retries are exhausted below;
+                # transient FAILED -> QUEUED retries are not counted here.
+                pass
+            elif update.status == JobStatus.CANCELLED:
+                JOBS_FAILED_TOTAL.labels(reason="cancelled").inc()
 
         # Handle retry logic for failed jobs
         if update.status == JobStatus.FAILED and job.retry_count < job.max_retries:
             job.retry_count += 1
             job.status = JobStatus.QUEUED.value
+            JOB_RETRIES_TOTAL.inc()
+            # job stays active across the retry; revert the dec() above
+            JOBS_ACTIVE.inc()
             # Re-enqueue
             job_event = {
                 "job_id": str(job.job_id),
@@ -244,6 +276,7 @@ class JobService:
                 logger.error(f"Failed to re-enqueue job {job_id}: {e}")
         elif update.status == JobStatus.FAILED and job.retry_count >= job.max_retries:
             job.status = JobStatus.DEAD.value
+            JOBS_FAILED_TOTAL.labels(reason="max_retries_exceeded").inc()
             logger.warning(f"Job {job_id} exceeded max retries, marked as DEAD")
 
         await self.db.flush()

@@ -17,10 +17,14 @@ servers:
     description: Log Service (local dev)
   - url: http://localhost:8004
     description: Storage Service (local dev)
+  - url: http://localhost:8005
+    description: Lineage Service (local dev)
 
 tags:
   - name: Jobs
     description: Spark job submission and management
+  - name: Schedules
+    description: Cron-based job scheduling
   - name: Databases
     description: Database/namespace management
   - name: Tables
@@ -29,6 +33,8 @@ tags:
     description: Per-job log retrieval
   - name: Storage
     description: Object storage management
+  - name: Lineage
+    description: OpenLineage event ingestion and dataset graph traversal
 
 security:
   - ApiKeyAuth: []
@@ -175,6 +181,87 @@ paths:
                 $ref: '#/components/schemas/LogResponse'
 
   # =============================================
+  # Job Service - Schedules
+  # =============================================
+  /api/v1/schedules:
+    post:
+      tags: [Schedules]
+      summary: Create a job schedule
+      operationId: createSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleCreateRequest'
+      responses:
+        '201':
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleResponse'
+    get:
+      tags: [Schedules]
+      summary: List job schedules
+      operationId: listSchedules
+      responses:
+        '200':
+          description: List of schedules
+
+  /api/v1/schedules/{schedule_id}:
+    get:
+      tags: [Schedules]
+      summary: Get schedule details
+      parameters:
+        - $ref: '#/components/parameters/ScheduleId'
+      responses:
+        '200':
+          description: Schedule details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleResponse'
+        '404':
+          description: Schedule not found
+    put:
+      tags: [Schedules]
+      summary: Update a schedule
+      parameters:
+        - $ref: '#/components/parameters/ScheduleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleUpdateRequest'
+      responses:
+        '200':
+          description: Schedule updated
+    delete:
+      tags: [Schedules]
+      summary: Delete a schedule
+      parameters:
+        - $ref: '#/components/parameters/ScheduleId'
+      responses:
+        '204':
+          description: Schedule deleted
+
+  /api/v1/schedules/{schedule_id}/trigger:
+    post:
+      tags: [Schedules]
+      summary: Manually trigger a one-off run for a schedule
+      parameters:
+        - $ref: '#/components/parameters/ScheduleId'
+      responses:
+        '202':
+          description: Schedule triggered; job submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+
+  # =============================================
   # Metadata Service - Databases
   # =============================================
   /api/v1/databases:
@@ -214,6 +301,19 @@ paths:
       responses:
         '204':
           description: Database dropped
+
+  /api/v1/databases/{db_name}/sync-glue:
+    post:
+      tags: [Databases]
+      summary: Backfill catalog rows for this database to AWS Glue
+      operationId: syncDatabaseToGlue
+      parameters:
+        - $ref: '#/components/parameters/DbName'
+      responses:
+        '200':
+          description: Glue sync completed (best-effort; per-table outcomes returned)
+        '404':
+          description: Database not found
 
   # =============================================
   # Metadata Service - Tables
@@ -349,6 +449,110 @@ paths:
         '200':
           description: Presigned URL generated
 
+  # =============================================
+  # Lineage Service
+  # =============================================
+  /api/v1/lineage:
+    post:
+      tags: [Lineage]
+      summary: Ingest an OpenLineage event
+      operationId: ingestLineageEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenLineageEvent'
+      responses:
+        '202':
+          description: Event accepted
+
+  /api/v1/jobs/{namespace}/{name}/runs:
+    get:
+      tags: [Lineage]
+      summary: List runs for a lineage job
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema: {type: string}
+        - name: name
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Run list
+
+  /api/v1/datasets/{namespace}/{name}:
+    get:
+      tags: [Lineage]
+      summary: Get dataset metadata
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema: {type: string}
+        - name: name
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Dataset metadata
+
+  /api/v1/datasets/{namespace}/{name}/upstream:
+    get:
+      tags: [Lineage]
+      summary: Walk upstream lineage from a dataset (recursive, bounded)
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema: {type: string}
+        - name: name
+          in: path
+          required: true
+          schema: {type: string}
+        - name: max_depth
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Upstream graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineageGraphResponse'
+
+  /api/v1/datasets/{namespace}/{name}/downstream:
+    get:
+      tags: [Lineage]
+      summary: Walk downstream lineage from a dataset (recursive, bounded)
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema: {type: string}
+        - name: name
+          in: path
+          required: true
+          schema: {type: string}
+        - name: max_depth
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Downstream graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineageGraphResponse'
+
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -380,6 +584,13 @@ components:
       required: true
       schema:
         type: string
+    ScheduleId:
+      name: schedule_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
 
   schemas:
     JobCreateRequest:
@@ -592,4 +803,145 @@ components:
         expiry:
           type: integer
           default: 3600
+
+    ScheduleCreateRequest:
+      type: object
+      required: [name, cron_expression, job_template]
+      properties:
+        name:
+          type: string
+        cron_expression:
+          type: string
+          example: "*/5 * * * *"
+        timezone:
+          type: string
+          default: UTC
+          example: America/New_York
+        job_template:
+          type: object
+          description: Template payload passed verbatim to the Job Service when the schedule fires.
+        enabled:
+          type: boolean
+          default: true
+        created_by:
+          type: string
+
+    ScheduleUpdateRequest:
+      type: object
+      properties:
+        cron_expression:
+          type: string
+        timezone:
+          type: string
+        job_template:
+          type: object
+        enabled:
+          type: boolean
+
+    ScheduleResponse:
+      type: object
+      properties:
+        schedule_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        cron_expression:
+          type: string
+        timezone:
+          type: string
+        job_template:
+          type: object
+        enabled:
+          type: boolean
+        last_run_at:
+          type: string
+          format: date-time
+        last_run_job_id:
+          type: string
+          format: uuid
+        next_run_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    OpenLineageEvent:
+      type: object
+      description: OpenLineage RunEvent. Additional facets are accepted (extra=allow).
+      required: [eventType, eventTime, run, job]
+      properties:
+        eventType:
+          type: string
+          enum: [START, RUNNING, COMPLETE, ABORT, FAIL, OTHER]
+        eventTime:
+          type: string
+          format: date-time
+        producer:
+          type: string
+        schemaURL:
+          type: string
+        run:
+          type: object
+          required: [runId]
+          properties:
+            runId:
+              type: string
+              format: uuid
+            facets:
+              type: object
+        job:
+          type: object
+          required: [namespace, name]
+          properties:
+            namespace:
+              type: string
+            name:
+              type: string
+            facets:
+              type: object
+        inputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineageDatasetRef'
+        outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineageDatasetRef'
+
+    LineageDatasetRef:
+      type: object
+      required: [namespace, name]
+      properties:
+        namespace:
+          type: string
+        name:
+          type: string
+        facets:
+          type: object
+
+    LineageGraphResponse:
+      type: object
+      properties:
+        root:
+          $ref: '#/components/schemas/LineageDatasetRef'
+        direction:
+          type: string
+          enum: [upstream, downstream]
+        max_depth:
+          type: integer
+        nodes:
+          type: array
+          items:
+            type: object
+            properties:
+              namespace: {type: string}
+              name: {type: string}
+              depth: {type: integer}
 
