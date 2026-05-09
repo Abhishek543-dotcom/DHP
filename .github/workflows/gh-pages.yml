@@ -2,7 +2,7 @@ name: Upload artifact
 
 on:
   push:
-    branches: ["AWS_VERSION"]
+    branches: ["dev"]
   workflow_dispatch:
 
 permissions:
